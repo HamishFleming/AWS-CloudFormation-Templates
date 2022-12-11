@@ -1,0 +1,1342 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation Script for WP Fargate
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: The name of the environment to add this service to
+  ServiceName:
+    Type: String
+    Default: Wordpress
+    Description: A name for the service
+  ImageUrl:
+    Type: String
+    Default: wordpress
+    Description: >-
+      The url of a docker image. Private or general wordpress:lates |
+      bitname/wordpress:7.1
+  ContainerCpu:
+    Type: Number
+    Default: 2048
+    Description: How much CPU to give the container. 1024 is 1 CPU apparently
+  ContainerMemory:
+    Type: Number
+    Default: 4096
+    Description: How many megabytes of memory to give the container
+  DBClass:
+    Default: db.t3.micro
+    Description: Database instance class
+    Type: String
+    AllowedValues:
+      - db.t3.micro
+    ConstraintDescription: must select a valid database instance type.
+  DBPort:
+    Default: 3360
+    Description: The port everything will try to access the configured db on
+    Type: Number
+  wordpressDBHost:
+    Description: The connection for the Wordpress Database (ip/url/anr)
+    Type: String
+  wordpressDBUser:
+    Description: The User For Wordpress To Connect to hte database with
+    Type: String
+    Default: Admin
+  wordpressDBPassword:
+    Description: The Password For That User
+    Type: String
+    Default: wordpress
+  wordpressDBName:
+    Description: The Name of the WordPress Database Table
+    Type: String
+    Default: wordpress
+  DBInstanceType:
+    Description: Aurora instance type
+    Type: String
+    Default: db.t2.small
+  fargateCIDRBlock:
+    Description: CIDR Block Type For VPC
+    Type: String
+    Default: 10.0.0.0/26
+  Public1CIDRBlock:
+    Description: CIDR Block for Public1
+    Type: String
+    Default: 10.0.0.0/28
+  Public2CIDRBlock:
+    Description: CIDR Block for Public2
+    Type: String
+    Default: 10.0.0.16/28
+  AzonePub1:
+    Description: Azone For Public Subnet 1
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+  AzonePub2:
+    Description: Azone for Public Subnet 2
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+Resources:
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '${EnvironmentName}-service-${ServiceName}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ce0f47d1-9838-4c16-9834-d12a0b3df885
+  fargateVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+  Subnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref fargateVPC
+      AvailabilityZone: !Ref AzonePub1
+      CidrBlock: !Ref Public1CIDRBlock
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fbba7f47-7505-4d39-9b30-07f28797aff6
+  Subnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref fargateVPC
+      AvailabilityZone: !Ref AzonePub2
+      CidrBlock: !Ref Public2CIDRBlock
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 280c60dd-05aa-4340-956e-2a3a57a01db7
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: a1bbdf2c-e3aa-408e-a263-e058422ab9fe
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref fargateVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 8f7340eb-7f68-4b83-bbd2-15e7de61b32e
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref fargateVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+  RouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet1
+      RouteTableId: !Ref RouteTable
+  RouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet2
+      RouteTableId: !Ref RouteTable
+  InternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bcda013d-4003-4d0b-a2d8-194b3bae4298
+  WordpressDB:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBName: !Ref wordpressDBName
+      Engine: MySQL
+      MasterUsername: !Ref wordpressDBUser
+      DBInstanceClass: !Ref DBClass
+      AllocatedStorage: '5'
+      MasterUserPassword: !Ref wordpressDBPassword
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 01554047-7c2b-41fe-8f9b-a419b92296b3
+  ECSCluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: !Sub '${EnvironmentName}-${ServiceName}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2d47598f-d51d-4fc7-a56b-bbe945fee521
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: fargateLoadBalancer
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0c0d8afc-8efb-4b32-8040-d94c7cc17c3f
+  LoadBalancerListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b0806842-8898-4781-b00c-2f0bbfc63c51
+  LoadBalancerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security group for loadbalancer to services on ECS
+      VpcId: !Ref fargateVPC
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 4a03c57f-1217-432c-bb34-6466a2799883
+  ContainerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref fargateVPC
+      GroupDescription: for ecs containers
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 261be0bf-0c97-47df-b550-f151791e61ff
+  Task:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Sub '${EnvironmentName}-service-${ServiceName}'
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      MountPoints:
+        - ContainerPath: /var/www/public_html/wp-content/wp-uploads
+          SourceVolume: WordpressUploads
+      Volumes:
+        - name: WordpressUploads
+          efsVolumeConfiguration:
+            fileSystemId: !Ref WpFileSystem
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Image: !Ref ImageUrl
+          Cpu: !Ref ContainerCpu
+          Memory: !Ref ContainerMemory
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - name: WORDPRESS_DB_USER
+              value: !Ref wordpressDBUser
+            - name: WORDPRESS_DB_HOST
+              value: !GetAtt
+                - WordpressDB
+                - Endpoint.Address
+            - name: WORDPRESS_DB_PASSWORD
+              value: !Ref wordpressDBPassword
+            - name: WORDPRESS_DB_NAME
+              value: !Ref wordpressDBName
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '${EnvironmentName}-service-${ServiceName}'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: !Ref ServiceName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 26435baa-a7bc-423a-9866-33de1d7a6a87
+    DependsOn: WordpressDB
+  Service:
+    Type: 'AWS::ECS::Service'
+    DependsOn: ListenerRule
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-${ServiceName}'
+      TaskDefinition: !Ref Task
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DesiredCount: 1
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 70
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref Subnet1
+            - !Ref Subnet2
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Ref ServiceName
+          ContainerPort: 80
+          TargetGroupArn: !Ref TargetGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 4510aeea-46d9-415b-b8de-2856598c12fd
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Sub 'LB-${ServiceName}'
+      VpcId: !Ref fargateVPC
+      Port: 80
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 10
+      TargetType: ip
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6993e69a-ef60-4b82-a043-c99507ac2e57
+  ListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      ListenerArn: !Ref LoadBalancerListener
+      Priority: 2
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 8344e0c8-055f-4817-bd37-82aa0b6f05d3
+  DBSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: DB subnet group for Aurora instances
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+    DependsOn: fargateVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c96b5f1b-97ab-41d7-bafa-d13de33090ed
+  DatabaseSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: wordpress-rds
+      VpcId: !Ref fargateVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d3a39726-6e0b-42d3-b764-230d37dfd0fc
+  ECSTaskExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: ecs-taskExecution
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 3d1e54f6-7a91-4af4-836d-294b4a8f57b7
+  WpFileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 98879930-eedc-4b63-a513-cf8504f91146
+  WpUploadsMountTarget:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref WpFileSystem
+      SubnetId: !Ref Subnet2
+      SecurityGroups:
+        - !Ref WpUploadsSecurityGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 96b24dca-1667-44e0-ba3b-1091fab8ab7e
+  WpUploadsSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5f853662-0ca6-4e7e-80a0-e221fe86c9eb
+Outputs:
+  VPC:
+    Description: VPC
+    Value: !Ref fargateVPC
+    Export:
+      Name: VPC
+  Subnet1:
+    Description: Subnet 1 on AZ1
+    Value: !Ref Subnet1
+    Export:
+      Name: Subnet1
+  Subnet2:
+    Description: Subnet 2 on AZ2
+    Value: !Ref Subnet2
+    Export:
+      Name: Subnet2
+  ECSTaskExecutionRole:
+    Description: ECS Task Execution Role
+    Value: !GetAtt
+      - ECSTaskExecutionRole
+      - Arn
+    Export:
+      Name: ECSTaskExecutionRole
+  Cluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: ECSCluster
+  Listener:
+    Description: listener port 80
+    Value: !Ref LoadBalancerListener
+    Export:
+      Name: Listener
+  ContainerSecurityGroup:
+    Description: container security group
+    Value: !Ref ContainerSecurityGroup
+    Export:
+      Name: ContainerSecurityGroup
+  LoadBalancerDNS:
+    Description: Domain name for the loadbalancer
+    Value: !GetAtt
+      - LoadBalancer
+      - DNSName
+    Export:
+      Name: DomainName
+  WordpressDB:
+    Description: RDS Endpoint Address
+    Value: !GetAtt
+      - WordpressDB
+      - Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::Region}-${AWS::StackName}-WordpressDB'
+Metadata:
+  'AWS::CloudFormation::Designer':
+    2d47598f-d51d-4fc7-a56b-bbe945fee521:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 460
+        'y': 870
+      z: 1
+      embeds: []
+    3d1e54f6-7a91-4af4-836d-294b4a8f57b7:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': 970
+      z: 1
+      embeds: []
+    26435baa-a7bc-423a-9866-33de1d7a6a87:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': 870
+      z: 1
+      embeds: []
+    a1bbdf2c-e3aa-408e-a263-e058422ab9fe:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 460
+        'y': 760
+      z: 1
+      embeds: []
+    c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5:
+      size:
+        width: 330
+        height: 330
+      position:
+        x: 80
+        'y': 210
+      z: 1
+      embeds:
+        - 6993e69a-ef60-4b82-a043-c99507ac2e57
+        - 4a03c57f-1217-432c-bb34-6466a2799883
+        - d3a39726-6e0b-42d3-b764-230d37dfd0fc
+        - 261be0bf-0c97-47df-b550-f151791e61ff
+    6993e69a-ef60-4b82-a043-c99507ac2e57:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 100
+        'y': 330
+      z: 2
+      parent: c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+      embeds: []
+      iscontainedinside:
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+    4a03c57f-1217-432c-bb34-6466a2799883:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 100
+        'y': 250
+      z: 2
+      parent: c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+      embeds: []
+      iscontainedinside:
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+    261be0bf-0c97-47df-b550-f151791e61ff:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 330
+      z: 2
+      parent: c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+      embeds: []
+      iscontainedinside:
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+    7ee616da-a9ba-4fd2-815c-e013c94e3a08:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 430
+        'y': 470
+      z: 1
+      embeds:
+        - bcda013d-4003-4d0b-a2d8-194b3bae4298
+    8f7340eb-7f68-4b83-bbd2-15e7de61b32e:
+      source:
+        id: c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+      target:
+        id: a1bbdf2c-e3aa-408e-a263-e058422ab9fe
+      z: 1
+    bcda013d-4003-4d0b-a2d8-194b3bae4298:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 460
+        'y': 530
+      z: 2
+      parent: 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+      embeds: []
+      isassociatedwith:
+        - a1bbdf2c-e3aa-408e-a263-e058422ab9fe
+      iscontainedinside:
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+        - 7ee616da-a9ba-4fd2-815c-e013c94e3a08
+      dependson:
+        - 8f7340eb-7f68-4b83-bbd2-15e7de61b32e
+    280c60dd-05aa-4340-956e-2a3a57a01db7:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 270
+        'y': 560
+      z: 1
+      embeds: []
+    fbba7f47-7505-4d39-9b30-07f28797aff6:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: -130
+        'y': 560
+      z: 0
+      embeds: []
+    0c0d8afc-8efb-4b32-8040-d94c7cc17c3f:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 190
+        'y': 760
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 4a03c57f-1217-432c-bb34-6466a2799883
+      iscontainedinside:
+        - fbba7f47-7505-4d39-9b30-07f28797aff6
+        - 280c60dd-05aa-4340-956e-2a3a57a01db7
+    b0806842-8898-4781-b00c-2f0bbfc63c51:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': 760
+      z: 1
+      embeds: []
+    8344e0c8-055f-4817-bd37-82aa0b6f05d3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 360
+        'y': 760
+      z: 1
+      embeds: []
+    4510aeea-46d9-415b-b8de-2856598c12fd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 360
+        'y': 870
+      z: 1
+      embeds: []
+      dependson:
+        - 8344e0c8-055f-4817-bd37-82aa0b6f05d3
+    ce0f47d1-9838-4c16-9834-d12a0b3df885:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: -110
+        'y': 360
+      z: 1
+      embeds: []
+    01554047-7c2b-41fe-8f9b-a419b92296b3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 10
+        'y': 760
+      z: 1
+      embeds: []
+    c96b5f1b-97ab-41d7-bafa-d13de33090ed:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 80
+        'y': 560
+      z: 1
+      embeds: []
+      dependson:
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+    d3a39726-6e0b-42d3-b764-230d37dfd0fc:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 250
+      z: 2
+      parent: c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+      embeds: []
+      iscontainedinside:
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+        - c8e6c2cf-c9df-41ac-a4d2-0072304c3aa5
+    98879930-eedc-4b63-a513-cf8504f91146:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 870
+      z: 1
+      embeds: []
+    5f853662-0ca6-4e7e-80a0-e221fe86c9eb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 760
+      z: 1
+      embeds: []
+    96b24dca-1667-44e0-ba3b-1091fab8ab7e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 870
+      z: 1
+      embeds: []
