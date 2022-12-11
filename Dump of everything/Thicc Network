@@ -1,0 +1,1854 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Template to deploy Wordpress application on EFS using ECS Fargate and a RDM
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcCIDR
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PublicSubnet3CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - PrivateSubnet3CIDR
+      - Label:
+          default: ECS cluster Configuration
+        Parameters:
+          - ClusterName
+          - Image
+          - MinCapacity
+          - MaxCapacity
+      - Label:
+          default: Amazon Aurora Serverless MySQL DB Configuration
+        Parameters:
+          - DBAdminUsername
+          - DBPassword
+          - MinimumAuroraCapacityUnit
+          - MaximumAuroraCapacityUnit
+      - Label:
+          default: EFS Configuration
+        Parameters:
+          - PerformanceMode
+          - EfsProvisionedThroughputInMibps
+          - ThroughputMode
+      - Label:
+          default: Tagging Configuration
+        Parameters:
+          - EnvironmentName
+  'AWS::CloudFormation::Designer':
+    0d461f1c-927c-4163-9c37-0020648204e8:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 960
+        'y': 300
+      z: 1
+      embeds: []
+    23f3b8db-8711-4adf-a1a1-5d46453ce956:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 900
+        'y': 900
+      z: 1
+      embeds: []
+    1a33cd34-4174-4fe5-922a-d7cc66f3acc8:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 960
+        'y': 420
+      z: 1
+      embeds: []
+    108655f9-935d-46f3-abe9-6c62a140fb5d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 960
+        'y': 540
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 1a33cd34-4174-4fe5-922a-d7cc66f3acc8
+    47adbb6f-1608-43ff-937c-4be88a8ba282:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 480
+        'y': 780
+      z: 1
+      embeds: []
+    7901c1f7-b8ef-4bcc-ad96-b3b7799b87b4:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 990
+      z: 1
+      embeds: []
+    55a0e7d1-b849-4c96-9c3d-c9370b987cc1:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 990
+      z: 1
+      embeds: []
+    aa5115bc-2b31-4d06-b60f-0d22da5e02e9:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 990
+      z: 1
+      embeds: []
+    e0f6b971-1ba8-49a0-adce-cbd59ecddb5b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1050
+        'y': 90
+      z: 1
+      embeds: []
+    be25d1bf-3955-4aeb-8d6b-b5f16e8792f9:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1080
+        'y': 330
+      z: 1
+      embeds: []
+    cae66ff4-9b2e-4c55-a560-7613032de085:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1080
+        'y': 450
+      z: 1
+      embeds: []
+    e415b638-da56-4ce6-903c-76333ec6e9fd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1080
+        'y': 570
+      z: 1
+      embeds: []
+    2fcc5dac-9243-4cff-aac1-ae32dbc11981:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1080
+        'y': 690
+      z: 1
+      embeds: []
+    26b68ef7-566a-4082-9ba9-ac4c2508086c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1110
+        'y': 810
+      z: 1
+      embeds: []
+    665abf22-c872-479f-b399-6c7c2fb213cd:
+      size:
+        width: 420
+        height: 330
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds:
+        - 78efa19a-9518-4960-9d7d-1eba5d289dee
+        - 0af75684-6191-4b54-8a94-4734f051a5bb
+        - 199ea472-3ae6-49bf-9162-a5b06e8a1e5b
+        - 95b5f42b-5096-4258-918d-cc8a25679a2b
+        - 65073cd4-b715-49b5-91d8-9fed90ebfa73
+    78efa19a-9518-4960-9d7d-1eba5d289dee:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 150
+      z: 2
+      parent: 665abf22-c872-479f-b399-6c7c2fb213cd
+      embeds: []
+      iscontainedinside:
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+    0af75684-6191-4b54-8a94-4734f051a5bb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 210
+        'y': 150
+      z: 2
+      parent: 665abf22-c872-479f-b399-6c7c2fb213cd
+      embeds: []
+      iscontainedinside:
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+    199ea472-3ae6-49bf-9162-a5b06e8a1e5b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 270
+      z: 2
+      parent: 665abf22-c872-479f-b399-6c7c2fb213cd
+      embeds: []
+      iscontainedinside:
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+    95b5f42b-5096-4258-918d-cc8a25679a2b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 210
+        'y': 270
+      z: 2
+      parent: 665abf22-c872-479f-b399-6c7c2fb213cd
+      embeds: []
+      iscontainedinside:
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+    cdd33138-1bc1-44b3-a325-841a8f5e492e:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 660
+        'y': 390
+      z: 1
+      embeds:
+        - 943f9fdf-e713-4f87-b5d9-7642818a63a3
+    34ffe3f7-c16c-4002-b0f9-e09fe4c299e8:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 540
+        'y': 90
+      z: 1
+      embeds:
+        - 1d0460d9-4b85-414c-8baf-0515e730c6b3
+    bcbc8f4f-a2e3-434e-9a08-e7fb18bb284d:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 360
+        'y': 480
+      z: 1
+      embeds:
+        - 7c311953-c422-4f6d-b29b-7abec7f1a797
+    48adc40d-9726-4aea-a552-fa90626b007c:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 60
+        'y': 480
+      z: 1
+      embeds:
+        - ed5cb72a-7c43-4b5d-bba5-3d6b3cb01d7a
+    3d176a38-9f22-47a5-9178-cb3e65191b89:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 690
+        'y': 900
+      z: 1
+      embeds: []
+    a4060e60-940d-4cbb-9373-c0196b8bb3c4:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1110
+        'y': 930
+      z: 1
+      embeds: []
+    c65400d8-c6fb-4985-be09-4ec74b95cccf:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 480
+        'y': 900
+      z: 1
+      embeds: []
+    6c495b06-ec08-4b36-abed-c3bec33e96dc:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1110
+        'y': 1050
+      z: 1
+      embeds: []
+    19c1a8ec-19f0-4a61-b4ea-9d365e6b2e92:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 870
+        'y': 690
+      z: 1
+      embeds: []
+    fbf7b909-c459-4c4c-b59e-0de7e211f4bb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 1110
+      z: 1
+      embeds: []
+    2499b627-8e94-4710-a6e3-d72399f48dd5:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 270
+        'y': 780
+      z: 1
+      embeds: []
+    c3190ddf-0dd8-4957-9303-59b72c2a6054:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 1110
+      z: 1
+      embeds: []
+    02f9af03-6809-416f-8d51-c1a6520d2195:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 60
+        'y': 780
+      z: 1
+      embeds: []
+    c3f75217-3d1a-4ec4-a653-5e1f175d6d69:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 840
+        'y': 90
+      z: 1
+      embeds: []
+    2a292f6a-10d4-4e41-b64d-ad5975c345ac:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 660
+        'y': 690
+      z: 1
+      embeds: []
+    520c1823-c8d4-479c-8c00-eff6766387bc:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 1110
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 78efa19a-9518-4960-9d7d-1eba5d289dee
+      iscontainedinside:
+        - 2a292f6a-10d4-4e41-b64d-ad5975c345ac
+        - c3f75217-3d1a-4ec4-a653-5e1f175d6d69
+        - 02f9af03-6809-416f-8d51-c1a6520d2195
+    65073cd4-b715-49b5-91d8-9fed90ebfa73:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 330
+        'y': 150
+      z: 2
+      parent: 665abf22-c872-479f-b399-6c7c2fb213cd
+      embeds: []
+      iscontainedinside:
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+        - 665abf22-c872-479f-b399-6c7c2fb213cd
+      dependson:
+        - 520c1823-c8d4-479c-8c00-eff6766387bc
+    66940c82-8a23-4a7b-b31e-3db17b354ca6:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 1110
+      z: 1
+      embeds: []
+    c069d434-e58c-42fe-9585-4c740b8d564d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 1110
+      z: 1
+      embeds: []
+      dependson:
+        - 66940c82-8a23-4a7b-b31e-3db17b354ca6
+    79820dcc-507e-4b47-b2df-0cfb37bf2d01:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 660
+        'y': 1110
+      z: 1
+      embeds: []
+    5417481a-2f40-4aca-8e66-001bf36d221b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 780
+        'y': 1110
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 79820dcc-507e-4b47-b2df-0cfb37bf2d01
+    344ff423-3088-4206-a569-154035372408:
+      source:
+        id: 665abf22-c872-479f-b399-6c7c2fb213cd
+      target:
+        id: 26b68ef7-566a-4082-9ba9-ac4c2508086c
+      z: 1
+    ed5cb72a-7c43-4b5d-bba5-3d6b3cb01d7a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 540
+      z: 2
+      parent: 48adc40d-9726-4aea-a552-fa90626b007c
+      embeds: []
+      isassociatedwith:
+        - 26b68ef7-566a-4082-9ba9-ac4c2508086c
+      iscontainedinside:
+        - 48adc40d-9726-4aea-a552-fa90626b007c
+        - 48adc40d-9726-4aea-a552-fa90626b007c
+      dependson:
+        - 344ff423-3088-4206-a569-154035372408
+    af722bc8-0fba-445c-b1ff-1b196c874486:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 900
+        'y': 1110
+      z: 1
+      embeds: []
+      dependson:
+        - 344ff423-3088-4206-a569-154035372408
+    1d3bac82-36a7-46fa-ba8f-8410ffea809e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1170
+        'y': 90
+      z: 1
+      embeds: []
+    943f9fdf-e713-4f87-b5d9-7642818a63a3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 690
+        'y': 450
+      z: 2
+      parent: cdd33138-1bc1-44b3-a325-841a8f5e492e
+      embeds: []
+      isassociatedwith:
+        - 1d3bac82-36a7-46fa-ba8f-8410ffea809e
+      iscontainedinside:
+        - cdd33138-1bc1-44b3-a325-841a8f5e492e
+        - cdd33138-1bc1-44b3-a325-841a8f5e492e
+    4f95e8f4-3b1b-41c2-86de-5140145fd73c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1200
+        'y': 210
+      z: 1
+      embeds: []
+      dependson:
+        - 344ff423-3088-4206-a569-154035372408
+    c0d0ba34-bd0f-4f68-ae0e-0439abc94c0a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1200
+        'y': 330
+      z: 1
+      embeds: []
+    1d0460d9-4b85-414c-8baf-0515e730c6b3:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 570
+        'y': 150
+      z: 2
+      parent: 34ffe3f7-c16c-4002-b0f9-e09fe4c299e8
+      embeds: []
+      isassociatedwith:
+        - c0d0ba34-bd0f-4f68-ae0e-0439abc94c0a
+      iscontainedinside:
+        - 34ffe3f7-c16c-4002-b0f9-e09fe4c299e8
+        - 34ffe3f7-c16c-4002-b0f9-e09fe4c299e8
+    e0f86c01-f754-40bd-905b-aadb30835315:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1200
+        'y': 450
+      z: 1
+      embeds: []
+      dependson:
+        - 344ff423-3088-4206-a569-154035372408
+    56cdbad7-3a02-49a5-a608-68d9d716eb8c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1200
+        'y': 570
+      z: 1
+      embeds: []
+    7c311953-c422-4f6d-b29b-7abec7f1a797:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 390
+        'y': 540
+      z: 2
+      parent: bcbc8f4f-a2e3-434e-9a08-e7fb18bb284d
+      embeds: []
+      isassociatedwith:
+        - 56cdbad7-3a02-49a5-a608-68d9d716eb8c
+      iscontainedinside:
+        - bcbc8f4f-a2e3-434e-9a08-e7fb18bb284d
+        - bcbc8f4f-a2e3-434e-9a08-e7fb18bb284d
+    2da3fd3c-e6c9-4191-84b9-e6328045ed72:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 1200
+        'y': 690
+      z: 1
+      embeds: []
+    2f4cfe5d-78db-4858-946c-5440fa745c19:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -50
+        'y': 990
+      z: 1
+      embeds: []
+    d33ddfb8-3614-4874-bc26-b8627db83a1e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -150
+        'y': 990
+      z: 1
+      embeds: []
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: Not currently used here
+  ServiceName:
+    Type: String
+    Default: Wordpress
+    Description: A name for the service wordpress service
+  ClusterName:
+    Type: String
+    Description: Name for Aurora Cluster DB and EFS.
+    Default: wordpressonefs
+  Image:
+    Type: String
+    Default: 'wordpress:8-apache'
+    Description: Wordpress Image for the ECS service.
+  MinCapacity:
+    Description: Minimum Fargate tasks to run
+    Type: Number
+    Default: 1
+  MaxCapacity:
+    Description: Maximum Fargate tasks to scale
+    Type: Number
+    Default: 5
+  wordpressDBUser:
+    Description: The User For Wordpress To Connect to hte database with
+    Type: String
+    Default: Admin
+  wordpressDBPassword:
+    Description: The Password For That User
+    Type: String
+    Default: wordpress
+  wordpressDBName:
+    Description: The Name of the WordPress Database Table
+    Type: String
+    Default: wordpress
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+  PublicSubnet1CIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the public subnet in the
+      first Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+  PublicSubnet2CIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the public subnet in the
+      second Availability Zone
+    Type: String
+    Default: 10.192.11.0/24
+  PublicSubnet3CIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the public subnet in the
+      second Availability Zone
+    Type: String
+    Default: 10.192.12.0/24
+  PrivateSubnet1CIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the private subnet in the
+      first Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+  PrivateSubnet2CIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the private subnet in the
+      second Availability Zone
+    Type: String
+    Default: 10.192.21.0/24
+  PrivateSubnet3CIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the private subnet in the
+      second Availability Zone
+    Type: String
+    Default: 10.192.22.0/24
+  DBAdminUsername:
+    Description: >-
+      Please enter a username for the Aurora DB that will be created as part of
+      this stack.
+    Type: String
+    Default: admin
+  DBPassword:
+    NoEcho: true
+    Description: >-
+      Please enter a password for the Aurora DB that will be created as part of
+      this stack.
+    Type: String
+    MinLength: 8
+    MaxLength: 41
+  MinimumAuroraCapacityUnit:
+    Description: Minimum Aurora capacity unit
+    Type: Number
+    Default: 1
+  MaximumAuroraCapacityUnit:
+    Description: Maximum Aurora capacity unit
+    Type: Number
+    Default: 16
+  PerformanceMode:
+    Type: String
+    AllowedValues:
+      - generalPurpose
+      - maxIO
+    Default: generalPurpose
+  EfsProvisionedThroughputInMibps:
+    Type: Number
+    MinValue: 0
+    MaxValue: 1024
+    Default: 0
+  ThroughputMode:
+    Type: String
+    AllowedValues:
+      - bursting
+      - provisioned
+    Default: bursting
+Rules:
+  ProvisionedThroughput:
+    RuleCondition: !Equals 
+      - !Ref ThroughputMode
+      - provisioned
+    Assertions:
+      - Assert: !Not 
+          - !Equals 
+            - '0'
+            - !Ref EfsProvisionedThroughputInMibps
+        AssertDescription: >-
+          EfsProvisionedThroughputInMibps must be greater than 0 when
+          ThroughputMode is provisioned
+  BurstingThroughput:
+    RuleCondition: !Equals 
+      - !Ref ThroughputMode
+      - bursting
+    Assertions:
+      - Assert: !Equals 
+          - '0'
+          - !Ref EfsProvisionedThroughputInMibps
+        AssertDescription: >-
+          EfsProvisionedThroughputInMibps must be 0 when ThroughputMode is
+          bursting
+Conditions:
+  IsProvisioned: !Equals 
+    - Ref: ThroughputMode
+    - provisioned
+Mappings:
+  RegionMap:
+    us-east-1:
+      elbAcc: '127311923021'
+    us-east-2:
+      elbAcc: 033677994240
+    us-west-1:
+      elbAcc: 027434742980
+    us-west-2:
+      elbAcc: '797873946194'
+    af-south-1:
+      elbAcc: 098369216593
+    ca-central-1:
+      elbAcc: '985666609251'
+    eu-central-1:
+      elbAcc: 054676820928
+    eu-west-1:
+      elbAcc: '156460612806'
+    eu-west-2:
+      elbAcc: '652711504416'
+    eu-south-1:
+      elbAcc: '635631232127'
+    eu-west-3:
+      elbAcc: 009996457667
+    eu-north-1:
+      elbAcc: '897822967062'
+    ap-east-1:
+      elbAcc: '754344448648'
+    ap-northeast-1:
+      elbAcc: '582318560864'
+    ap-northeast-2:
+      elbAcc: '600734575887'
+    ap-northeast-3:
+      elbAcc: '383597477331'
+    ap-southeast-1:
+      elbAcc: '114774131450'
+    ap-southeast-2:
+      elbAcc: '783225319266'
+    ap-south-1:
+      elbAcc: '718504428378'
+    me-south-1:
+      elbAcc: '076674570225'
+    sa-east-1:
+      elbAcc: '507241528517'
+    us-gov-west-1:
+      elbAcc: 048591011584
+    us-gov-east-1:
+      elbAcc: '190560391635'
+Resources:
+  RDSSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Description: This is a Secrets Manager secret for the RDS DB instance
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2f4cfe5d-78db-4858-946c-5440fa745c19
+  SecretRDSInstanceAttachment:
+    Type: 'AWS::SecretsManager::SecretTargetAttachment'
+    Properties:
+      SecretId: !Ref RDSSecret
+      TargetId: !Ref RDSInstance
+      TargetType: 'AWS::RDS::DBInstance'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d33ddfb8-3614-4874-bc26-b8627db83a1e
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 665abf22-c872-479f-b399-6c7c2fb213cd
+  vpcFlowLog:
+    Type: 'AWS::EC2::FlowLog'
+    Properties:
+      LogDestination: !Join 
+        - /
+        - - !GetAtt 
+            - loadbalancerLogBucket
+            - Arn
+          - vpcflowlogs
+      LogDestinationType: s3
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: REJECT
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2da3fd3c-e6c9-4191-84b9-e6328045ed72
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref EnvironmentName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 26b68ef7-566a-4082-9ba9-ac4c2508086c
+  InternetGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 344ff423-3088-4206-a569-154035372408
+  PublicSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Public Subnet (AZ1)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2a292f6a-10d4-4e41-b64d-ad5975c345ac
+  PublicSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Public Subnet (AZ2)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c3f75217-3d1a-4ec4-a653-5e1f175d6d69
+  PublicSubnet3:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 2
+        - !GetAZs ''
+      CidrBlock: !Ref PublicSubnet3CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Public Subnet (AZ3)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 02f9af03-6809-416f-8d51-c1a6520d2195
+  PrivateSubnet1:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Private Subnet (AZ1)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 19c1a8ec-19f0-4a61-b4ea-9d365e6b2e92
+  PrivateSubnet2:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Private Subnet (AZ2)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c65400d8-c6fb-4985-be09-4ec74b95cccf
+  PrivateSubnet3:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 2
+        - !GetAZs ''
+      CidrBlock: !Ref PrivateSubnet3CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Private Subnet (AZ3)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 3d176a38-9f22-47a5-9178-cb3e65191b89
+  NatGateway1EIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: e0f86c01-f754-40bd-905b-aadb30835315
+  NatGateway2EIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 4f95e8f4-3b1b-41c2-86de-5140145fd73c
+  NatGateway3EIP:
+    Type: 'AWS::EC2::EIP'
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: af722bc8-0fba-445c-b1ff-1b196c874486
+  NatGateway1:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt 
+        - NatGateway1EIP
+        - AllocationId
+      SubnetId: !Ref PublicSubnet1
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 56cdbad7-3a02-49a5-a608-68d9d716eb8c
+  NatGateway2:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt 
+        - NatGateway2EIP
+        - AllocationId
+      SubnetId: !Ref PublicSubnet2
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c0d0ba34-bd0f-4f68-ae0e-0439abc94c0a
+  NatGateway3:
+    Type: 'AWS::EC2::NatGateway'
+    Properties:
+      AllocationId: !GetAtt 
+        - NatGateway3EIP
+        - AllocationId
+      SubnetId: !Ref PublicSubnet3
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1d3bac82-36a7-46fa-ba8f-8410ffea809e
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Public Routes'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 48adc40d-9726-4aea-a552-fa90626b007c
+  DefaultPublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ed5cb72a-7c43-4b5d-bba5-3d6b3cb01d7a
+  PublicSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  PublicSubnet3RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+  PrivateRouteTable1:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Private Routes (AZ1)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bcbc8f4f-a2e3-434e-9a08-e7fb18bb284d
+  DefaultPrivateRoute1:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7c311953-c422-4f6d-b29b-7abec7f1a797
+  PrivateSubnet1RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+  PrivateRouteTable2:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Private Routes (AZ2)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 34ffe3f7-c16c-4002-b0f9-e09fe4c299e8
+  DefaultPrivateRoute2:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1d0460d9-4b85-414c-8baf-0515e730c6b3
+  PrivateSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+  PrivateRouteTable3:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName} Private Routes (AZ3)'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: cdd33138-1bc1-44b3-a325-841a8f5e492e
+  DefaultPrivateRoute3:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway3
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 943f9fdf-e713-4f87-b5d9-7642818a63a3
+  PrivateSubnet3RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      SubnetId: !Ref PrivateSubnet3
+  WordpressDBSubnetGroupName:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: WordpressDB SubnetGroupName
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2499b627-8e94-4710-a6e3-d72399f48dd5
+  WordpressDBSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable DB access via port 3306
+      SecurityGroupIngress:
+        - CidrIp: !Ref VpcCIDR
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          Description: Provide DB access via port 3306
+      SecurityGroupEgress:
+        - CidrIp: !Ref VpcCIDR
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          Description: Provide DB access via port 3306
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 95b5f42b-5096-4258-918d-cc8a25679a2b
+  WordpressDB:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      DatabaseName: wordpress
+      DBClusterIdentifier: wordpress-db-aurora-serverless
+      DBSubnetGroupName: !Ref WordpressDBSubnetGroupName
+      Engine: aurora-mysql
+      EngineMode: serverless
+      MasterUsername: !Join 
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - !Ref RDSSecret
+          - ':SecretString:username}}'
+      MasterUserPassword: !Join 
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - !Ref RDSSecret
+          - ':SecretString:password}}'
+      StorageEncrypted: true
+      VpcSecurityGroupIds:
+        - !Ref WordpressDBSG
+      ScalingConfiguration:
+        AutoPause: true
+        MinCapacity: !Ref MinimumAuroraCapacityUnit
+        MaxCapacity: !Ref MaximumAuroraCapacityUnit
+        SecondsUntilAutoPause: 1000
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c3190ddf-0dd8-4957-9303-59b72c2a6054
+  EFSSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable EFS access via port 2049
+      SecurityGroupIngress:
+        - CidrIp: !Ref VpcCIDR
+          IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          Description: For enabling EFS access
+      SecurityGroupEgress:
+        - CidrIp: !Ref VpcCIDR
+          IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          Description: For enabling EFS access
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 199ea472-3ae6-49bf-9162-a5b06e8a1e5b
+  EFSFileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      Encrypted: true
+      PerformanceMode: !Ref PerformanceMode
+      FileSystemPolicy:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'elasticfilesystem:ClientMount'
+              - 'elasticfilesystem:ClientRootAccess'
+              - 'elasticfilesystem:ClientWrite'
+            Principal:
+              AWS: !GetAtt 
+                - ECSTaskRole
+                - Arn
+      ProvisionedThroughputInMibps: !If 
+        - IsProvisioned
+        - !Ref EfsProvisionedThroughputInMibps
+        - !Ref 'AWS::NoValue'
+      ThroughputMode: !Ref ThroughputMode
+      FileSystemTags:
+        - Key: Name
+          Value: !Ref ClusterName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: e0f6b971-1ba8-49a0-adce-cbd59ecddb5b
+  MountTargetPrivateSubnet1:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+      SubnetId: !Ref PrivateSubnet1
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fbf7b909-c459-4c4c-b59e-0de7e211f4bb
+  MountTargetPrivateSubnet2:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+      SubnetId: !Ref PrivateSubnet2
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6c495b06-ec08-4b36-abed-c3bec33e96dc
+  MountTargetPrivateSubnet3:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !Ref EFSSecurityGroup
+      SubnetId: !Ref PrivateSubnet3
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: a4060e60-940d-4cbb-9373-c0196b8bb3c4
+  AccessPointUploads:
+    Type: 'AWS::EFS::AccessPoint'
+    Properties:
+      AccessPointTags:
+        - Key: Name
+          Value: uploads
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: '33'
+        Gid: '33'
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: '33'
+          OwnerUid: '33'
+          Permissions: '0755'
+        Path: /uploads
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: e415b638-da56-4ce6-903c-76333ec6e9fd
+  AccessPointPlugins:
+    Type: 'AWS::EFS::AccessPoint'
+    Properties:
+      AccessPointTags:
+        - Key: Name
+          Value: plugins
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: '33'
+        Gid: '33'
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: '33'
+          OwnerUid: '33'
+          Permissions: '0755'
+        Path: /plugins
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: cae66ff4-9b2e-4c55-a560-7613032de085
+  AccessPointThemes:
+    Type: 'AWS::EFS::AccessPoint'
+    Properties:
+      AccessPointTags:
+        - Key: Name
+          Value: themes
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: '33'
+        Gid: '33'
+      RootDirectory:
+        CreationInfo:
+          OwnerGid: '33'
+          OwnerUid: '33'
+          Permissions: '0755'
+        Path: /themes
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: be25d1bf-3955-4aeb-8d6b-b5f16e8792f9
+  cluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - Cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: aa5115bc-2b31-4d06-b60f-0d22da5e02e9
+  ExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 55a0e7d1-b849-4c96-9c3d-c9370b987cc1
+  ECSTaskRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: EFSAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticfilesystem:ClientMount'
+                  - 'elasticfilesystem:ClientRootAccess'
+                  - 'elasticfilesystem:ClientWrite'
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'aws:TagKeys/Name': !Ref ClusterName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7901c1f7-b8ef-4bcc-ad96-b3b7799b87b4
+  AutoScalingRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - >-
+          arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 47adbb6f-1608-43ff-937c-4be88a8ba282
+  AutoScalingTarget:
+    Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
+    Properties:
+      MinCapacity: !Ref MinCapacity
+      MaxCapacity: !Ref MaxCapacity
+      ResourceId: !Join 
+        - /
+        - - service
+          - !Ref cluster
+          - !GetAtt 
+            - service
+            - Name
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ServiceNamespace: ecs
+      RoleARN: !GetAtt 
+        - AutoScalingRole
+        - Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 79820dcc-507e-4b47-b2df-0cfb37bf2d01
+  AutoScalingPolicy:
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: !Join 
+        - ''
+        - - !Ref ClusterName
+          - AutoScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 10
+        ScaleOutCooldown: 10
+        TargetValue: 75
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5417481a-2f40-4aca-8e66-001bf36d221b
+  service:
+    Type: 'AWS::ECS::Service'
+    DependsOn:
+      - listener
+    Properties:
+      ServiceName: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - service
+      Cluster: !Ref cluster
+      TaskDefinition: !Ref taskdefinition
+      EnableExecuteCommand: true
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: !Ref MinCapacity
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+            - !Ref PrivateSubnet3
+          SecurityGroups:
+            - !Ref containersecuritygroup
+      LoadBalancers:
+        - ContainerName: wordpress
+          ContainerPort: 80
+          TargetGroupArn: !Ref targetgroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c069d434-e58c-42fe-9585-4c740b8d564d
+  targetgroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: loadbalancer
+    Properties:
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+      HealthCheckIntervalSeconds: 60
+      HealthCheckPath: /
+      HealthCheckTimeoutSeconds: 30
+      UnhealthyThresholdCount: 5
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200,302'
+      Name: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - TargetGroup
+      Port: 80
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 65073cd4-b715-49b5-91d8-9fed90ebfa73
+  listener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref targetgroup
+          Type: forward
+      LoadBalancerArn: !Ref loadbalancer
+      Port: 80
+      Protocol: HTTP
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 66940c82-8a23-4a7b-b31e-3db17b354ca6
+  loadbalancerLogBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - loadbalancer
+          - logs
+          - !Ref 'AWS::AccountId'
+          - !Ref 'AWS::Region'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1a33cd34-4174-4fe5-922a-d7cc66f3acc8
+  loadbalancerLogBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref loadbalancerLogBucket
+      PolicyDocument:
+        Statement:
+          - Action: 's3:PutObject'
+            Effect: Allow
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref loadbalancerLogBucket
+                - /*
+            Principal:
+              AWS: !Join 
+                - ''
+                - - 'arn:aws:iam::'
+                  - !FindInMap 
+                    - RegionMap
+                    - !Ref 'AWS::Region'
+                    - elbAcc
+                  - ':root'
+          - Action: 's3:PutObject'
+            Effect: Allow
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref loadbalancerLogBucket
+                - /*
+            Principal:
+              Service: delivery.logs.amazonaws.com
+          - Action: 's3:GetBucketAcl'
+            Effect: Allow
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref loadbalancerLogBucket
+            Principal:
+              Service: delivery.logs.amazonaws.com
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 108655f9-935d-46f3-abe9-6c62a140fb5d
+  loadbalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref loadbalancerLogBucket
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref albsecuritygroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 520c1823-c8d4-479c-8c00-eff6766387bc
+  containersecuritygroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - ContainerSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref albsecuritygroup
+          Description: Container security group Ingress rule
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          Description: Container security group Egress rule
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0af75684-6191-4b54-8a94-4734f051a5bb
+  containersecuritygroupEgressRuleEFS:
+    Type: 'AWS::EC2::SecurityGroupEgress'
+    Properties:
+      CidrIp: !Ref VpcCIDR
+      Description: Container security group egress rule to access the EFS resources.
+      FromPort: 2049
+      IpProtocol: tcp
+      ToPort: 2049
+      GroupId: !Ref containersecuritygroup
+  containersecuritygroupEgressRuleAurora:
+    Type: 'AWS::EC2::SecurityGroupEgress'
+    Properties:
+      CidrIp: !Ref VpcCIDR
+      Description: Container security group egress rule to access the EFS resources.
+      FromPort: 3306
+      IpProtocol: tcp
+      ToPort: 3306
+      GroupId: !Ref containersecuritygroup
+  albsecuritygroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - LoadBalancerSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: ALB security group Ingress rule
+      SecurityGroupEgress:
+        - CidrIp: !Ref VpcCIDR
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          Description: ALB security group Egress
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 78efa19a-9518-4960-9d7d-1eba5d289dee
+  loggroupKmskey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: KMS key to encrypt the CloudWatch LogGroup
+      Enabled: true
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Join 
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Enabled CloudWatch to access KMS
+            Effect: Allow
+            Principal:
+              Service: !Join 
+                - ''
+                - - logs.
+                  - !Ref 'AWS::Region'
+                  - .amazonaws.com
+            Action:
+              - 'kms:Encrypt*'
+              - 'kms:Decrypt*'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Describe*'
+            Resource: '*'
+          - Sid: Allow ELB logs to be sent to S3
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - 'kms:Encrypt*'
+              - 'kms:Decrypt*'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Describe*'
+            Resource: '*'
+      PendingWindowInDays: 7
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0d461f1c-927c-4163-9c37-0020648204e8
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Join 
+        - ''
+        - - /ecs/
+          - !Ref ClusterName
+          - taskdefinition
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt 
+        - loggroupKmskey
+        - Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 23f3b8db-8711-4adf-a1a1-5d46453ce956
+  taskdefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      RequiresCompatibilities:
+        - EC2
+        - FARGATE
+      Family: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - td
+      ExecutionRoleArn: !GetAtt 
+        - ExecutionRole
+        - Arn
+      TaskRoleArn: !GetAtt 
+        - ECSTaskRole
+        - Arn
+      ContainerDefinitions:
+        - Name: initcontainer
+          Essential: false
+          Image: !Ref Image
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: ecs
+          MountPoints:
+            - ContainerPath: /mnt
+              SourceVolume: uploads
+          EntryPoint:
+            - sh
+            - '-c'
+            - >
+              #!/bin/sh
+
+              set -e
+
+              echo "Waiting for DB to be ready"
+
+              while ! mysqladmin ping -h $WORDPRESS_DB_HOST --silent; do
+                  sleep 1
+              done
+
+              echo "DB is ready"
+
+              echo "Creating User: $WORDPRESS_DB_USER"
+
+              mysql -h $WORDPRESS_DB_HOST -u $DBMASTER_USER_NAME
+              -p$DBMASTER_USER_PASSWORD -e "CREATE USER '$WORDPRESS_DB_USER'@'%'
+              IDENTIFIED BY '$WORDPRESS_DB_PASSWORD';"
+
+              echo "Creating Database: $WORDPRESS_DB_NAME"
+
+              mysql -h $WORDPRESS_DB_HOST -u $DBMASTER_USER_NAME
+              -p$DBMASTER_USER_PASSWORD -e "CREATE DATABASE $WORDPRESS_DB_NAME;"
+
+              echo "Granting Permissions"
+
+              mysql -h $WORDPRESS_DB_HOST -u $DBMASTER_USER_NAME
+              -p$DBMASTER_USER_PASSWORD -e "GRANT ALL PRIVILEGES ON
+              $WORDPRESS_DB_NAME.* TO '$WORDPRESS_DB_USER'@'%';"
+
+              echo "Flushing Privileges"
+
+              mysql -h $WORDPRESS_DB_HOST -u $DBMASTER_USER_NAME
+              -p$DBMASTER_USER_PASSWORD -e "FLUSH PRIVILEGES;"
+
+              echo "Done"
+          Environment:
+            - name: WORDPRESS_DB_HOST
+              value: !GetAtt 
+                - WordpressDB
+                - Endpoint.Address
+            - name: WORDPRESS_DB_USER
+              value: !Ref DBUser
+            - name: WORDPRESS_DB_PASSWORD
+              value: !Ref DBPassword
+            - name: WORDPRESS_DB_NAME
+              value: !Ref DBName
+            - name: DBMASTER_USER_NAME
+              value: !Join 
+                - ''
+                - - '{{resolve:secretsmanager:'
+                  - !Ref RDSSecret
+                  - ':SecretString:username}}'
+            - name: DBMASTER_USER_PASSWORD
+              value: !Join 
+                - ''
+                - - '{{resolve:secretsmanager:'
+                  - !Ref RDSSecret
+                  - ':SecretString:password}}'
+        - DependsOn:
+            - Condition: COMPLETE
+              ContainerName: initcontainer
+          Essential: true
+          Image: !Ref Image
+          MountPoints:
+            - ContainerPath: /var/www/html/wp-content/plugins/
+              SourceVolume: plugins
+            - ContainerPath: /var/www/html/wp-content/uploads/
+              SourceVolume: uploads
+            - ContainerPath: /var/www/html/wp-content/themes/
+              SourceVolume: themes
+          Name: wordpress
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              Protocol: tcp
+        - Name: !Ref ServiceName
+          Image: !Ref Image
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 80
+              Protocol: tcp
+          Environment:
+            - name: WORDPRESS_DB_USER
+              value: !Ref wordpressDBUser
+            - name: WORDPRESS_DB_HOST
+              value: !GetAtt 
+                - WordpressDB
+                - Endpoint.Address
+            - name: WORDPRESS_DB_PASSWORD
+              value: !Ref wordpressDBPassword
+            - name: WORDPRESS_DB_NAME
+              value: !Ref wordpressDBName
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      Volumes:
+        - Name: themes
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref EFSFileSystem
+            AuthorizationConfig:
+              IAM: ENABLED
+              AccessPointId: !Ref AccessPointThemes
+            TransitEncryption: ENABLED
+            RootDirectory: /
+        - EFSVolumeConfiguration:
+            FilesystemId: !Ref EFSFileSystem
+            AuthorizationConfig:
+              IAM: ENABLED
+              AccessPointId: !Ref AccessPointUploads
+            TransitEncryption: ENABLED
+            RootDirectory: /
+          Name: uploads
+        - EFSVolumeConfiguration:
+            FilesystemId: !Ref EFSFileSystem
+            AuthorizationConfig:
+              IAM: ENABLED
+              AccessPointId: !Ref AccessPointPlugins
+            TransitEncryption: ENABLED
+            RootDirectory: /
+          Name: plugins
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2fcc5dac-9243-4cff-aac1-ae32dbc11981
+Outputs:
+  ALBEndpoint:
+    Description: ALB endpoint
+    Value: !GetAtt 
+      - loadbalancer
+      - DNSName
+  DBEndpoint:
+    Description: DB endpoint
+    Value: !GetAtt 
+      - WordpressDB
+      - Endpoint.Address

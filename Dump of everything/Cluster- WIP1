@@ -1,0 +1,753 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Deploy a service on AWS Fargate, hosted in a private subnet, but accessible
+  via a public load balancer.
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: The name of the environment to add this service to
+  ServiceName:
+    Type: String
+    Default: Wordpress
+    Description: A name for the service
+  ImageUrl:
+    Type: String
+    Default: wordpress
+    Description: >-
+      The url of a docker image that contains the application process that will
+      handle the traffic for this service
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: What port number the application inside the docker container is binding to
+  ContainerCpu:
+    Type: Number
+    Default: 256
+    Description: How much CPU to give the container. 1024 is 1 CPU
+  ContainerMemory:
+    Type: Number
+    Default: 512
+    Description: How much memory in megabytes to give the container
+  ServiceNameDB:
+    Type: String
+    Default: MySQL
+    Description: A name for the service
+  ImageUrlDB:
+    Type: String
+    Default: 'mysql:5.7'
+    Description: >-
+      The url of a docker image that contains the application process that will
+      handle the traffic for this service
+  ContainerPortDB:
+    Type: Number
+    Default: 3306
+    Description: What port number the application inside the docker container is binding to
+  ContainerCpuDB:
+    Type: Number
+    Default: 512
+    Description: How much CPU to give the container. 1024 is 1 CPU
+  ContainerMemoryDB:
+    Type: Number
+    Default: 1024
+    Description: How much memory in megabytes to give the container
+  Path:
+    Type: String
+    Default: '*'
+    Description: >-
+      A path on the load balancer that this service should be connected to. Use
+      * to send all load balancer traffic to this service.
+  Priority:
+    Type: Number
+    Default: 1
+    Description: >-
+      The priority for the routing rule added to the load balancer. This only
+      applies if your have multiple services which have been assigned to
+      different paths on the load balancer.
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: How many copies of the service task to run
+  Role:
+    Type: String
+    Default: ''
+    Description: >-
+      (Optional) An IAM role to give the service's containers if the code within
+      needs to access other AWS resources like S3 buckets, DynamoDB tables, etc
+Conditions:
+  HasCustomRole: !Not 
+    - !Equals 
+      - Ref: Role
+      - ''
+Resources:
+  containersecuritygroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - ContainerSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref albsecuritygroup
+          Description: Container security group Ingress rule
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          Description: Container security group Egress rule
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 870b7097-cee6-4964-93c5-67c79aa2c365
+  albsecuritygroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: !Join 
+        - '-'
+        - - !Ref ClusterName
+          - LoadBalancerSecurityGroup
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: ALB security group Ingress rule
+      SecurityGroupEgress:
+        - CidrIp: !Ref VpcCIDR
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          Description: ALB security group Egress
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9e1bf90f-7388-4eb2-b5ae-0077cdfb4d54
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: !Sub '${EnvironmentName}-service-${ServiceName}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5c49532c-fea0-4fa3-a015-ba9931979369
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Ref ServiceName
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !ImportValue 
+        'Fn::Sub': '${EnvironmentName}:ECSTaskExecutionRole'
+      TaskRoleArn: !If 
+        - HasCustomRole
+        - !Ref Role
+        - !Ref 'AWS::NoValue'
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Cpu: !Ref ContainerCpu
+          Memory: !Ref ContainerMemory
+          Image: !Ref ImageUrl
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '${EnvironmentName}-service-${ServiceName}'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: !Ref ServiceName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fe45dd47-0385-47d1-a01d-e0840fd80618
+  Service:
+    Type: 'AWS::ECS::Service'
+    DependsOn: LoadBalancerRule
+    Properties:
+      ServiceName: !Ref ServiceName
+      Cluster: !ImportValue 
+        'Fn::Sub': '${EnvironmentName}:ClusterName'
+        Cluster: !Ref cluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: !Ref DesiredCount
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !ImportValue 
+              'Fn::Sub': '${EnvironmentName}:ContainerSecurityGroup'
+          Subnets:
+            - !ImportValue 
+              'Fn::Sub': '${EnvironmentName}:PublicSubnet'
+            - !ImportValue 
+              'Fn::Sub': '${EnvironmentName}:InfraSubnet'
+      TaskDefinition: !Ref TaskDefinition
+      LoadBalancers:
+        - ContainerName: !Ref ServiceName
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f8acf9fe-11db-4241-be4a-b08a7e898bac
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      TargetType: ip
+      Name: !Ref ServiceName
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-399
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c93d66e8-9428-4c30-807a-d76e75694a3c
+  listener2:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref targetgroup
+          Type: forward
+      LoadBalancerArn: !Ref loadbalancer
+      Port: 80
+      Protocol: HTTP
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 214382b7-ff4c-4177-8129-ab84e0a44754
+  loadbalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref albsecuritygroup
+      Subnets:
+        - !Ref PublicSubnet2
+        - !Ref PublicSubnet3
+        - !Ref PublicSubnet
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6c5d8acb-5194-4553-ac74-f519177be01d
+  AutoScalingRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - application-autoscaling.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Ref 'AWS::StackName'
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'application-autoscaling:*'
+                  - 'cloudwatch:DescribeAlarms'
+                  - 'cloudwatch:PutMetricAlarm'
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ab182e53-f2b8-4e05-9ba3-15ab43c2cc9a
+  ECSScalableTarget:
+    Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
+    Properties:
+      MinCapacity: !Ref MinCapacity
+      MaxCapacity: !Ref MaxCapacity
+      RoleARN: !GetAtt 
+        - AutoScalingRole
+        - Arn
+      ServiceNamespace: ecs
+      ResourceId: !Join 
+        - /
+        - - service
+          - !Ref cluster
+          - !GetAtt service.Name
+      ScalableDimension: 'ecs:service:DesiredCount'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 09fd09ab-46e6-443f-adaa-c35b59d92981
+  ServiceScalingPolicyCPU:
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-target-tracking-cpu70'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ECSScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        ScaleInCooldown: 180
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1cba77b5-33bc-4ab8-abdd-951d94378e9b
+  ServiceScalingPolicyMem:
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-target-tracking-mem90'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ECSScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 90
+        ScaleInCooldown: 180
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fbda9c32-cf1b-4a50-9c87-7fe70bcd9a1a
+  LoadBalancerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - !Ref Path
+      ListenerArn: !ImportValue 
+        'Fn::Sub': '${EnvironmentName}:PublicListener'
+      Priority: !Ref Priority
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b37af745-a425-4d91-a7fe-5c598bae9241
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Sub 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 054eb7f4-eaff-4d88-932f-18b8b758768b
+  InfrastructureSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Sub 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bb459bc1-00a0-464e-ad08-37211dd5e6a5
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ba8101d4-4622-4792-9a75-3432ac9bec2f
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c19d69ae-61ca-4378-9655-e4839102197e
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 813ce47c-ef1c-463a-b68e-b9dca38a5435
+  RouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+  RouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref InfrastructureSubnet
+      RouteTableId: !Ref RouteTable
+  InternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fdcb0ed3-9a45-446a-9dd2-be327da81bff
+  ELBV2LB64KB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 62e93b97-a832-4c71-9402-a176abf03f2e
+  cluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6cdbf21e-68c4-48cf-aea1-ab98c2c3bd9d
+Metadata:
+  'AWS::CloudFormation::Designer':
+    ba8101d4-4622-4792-9a75-3432ac9bec2f:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 990
+        'y': 690
+      z: 2
+      parent: 813ce47c-ef1c-463a-b68e-b9dca38a5435
+      embeds: []
+    7c805648-21b5-4cbf-b255-7cc6aad2b62d:
+      size:
+        width: 330
+        height: 240
+      position:
+        x: 30
+        'y': 30
+      z: 1
+      embeds:
+        - c93d66e8-9428-4c30-807a-d76e75694a3c
+        - 9e1bf90f-7388-4eb2-b5ae-0077cdfb4d54
+        - 870b7097-cee6-4964-93c5-67c79aa2c365
+    813ce47c-ef1c-463a-b68e-b9dca38a5435:
+      size:
+        width: 480
+        height: 750
+      position:
+        x: 840
+        'y': 270
+      z: 1
+      embeds:
+        - ba8101d4-4622-4792-9a75-3432ac9bec2f
+        - fdcb0ed3-9a45-446a-9dd2-be327da81bff
+    c19d69ae-61ca-4378-9655-e4839102197e:
+      source:
+        id: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+      target:
+        id: ba8101d4-4622-4792-9a75-3432ac9bec2f
+      z: 2
+    fdcb0ed3-9a45-446a-9dd2-be327da81bff:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 870
+        'y': 690
+      z: 2
+      parent: 813ce47c-ef1c-463a-b68e-b9dca38a5435
+      embeds: []
+      isassociatedwith:
+        - ba8101d4-4622-4792-9a75-3432ac9bec2f
+      iscontainedinside:
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+      dependson:
+        - c19d69ae-61ca-4378-9655-e4839102197e
+    bb459bc1-00a0-464e-ad08-37211dd5e6a5:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 750
+        'y': 90
+      z: 1
+      embeds: []
+    054eb7f4-eaff-4d88-932f-18b8b758768b:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 390
+        'y': 90
+      z: 1
+      embeds: []
+    c93d66e8-9428-4c30-807a-d76e75694a3c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 180
+      z: 2
+      parent: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+      embeds: []
+      iscontainedinside:
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+    b37af745-a425-4d91-a7fe-5c598bae9241:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 390
+        'y': 630
+      z: 1
+      embeds: []
+    fe45dd47-0385-47d1-a01d-e0840fd80618:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 110
+        'y': 640
+      z: 1
+      embeds: []
+    f8acf9fe-11db-4241-be4a-b08a7e898bac:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 280
+        'y': 710
+      z: 1
+      embeds: []
+      dependson:
+        - b37af745-a425-4d91-a7fe-5c598bae9241
+    5c49532c-fea0-4fa3-a015-ba9931979369:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 640
+        'y': 830
+      z: 1
+      embeds: []
+    9e1bf90f-7388-4eb2-b5ae-0077cdfb4d54:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 90
+      z: 2
+      parent: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+      embeds: []
+      iscontainedinside:
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+    870b7097-cee6-4964-93c5-67c79aa2c365:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 90
+      z: 2
+      parent: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+      embeds: []
+      iscontainedinside:
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+        - 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+    62e93b97-a832-4c71-9402-a176abf03f2e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 750
+        'y': 630
+      z: 1
+      embeds: []
+    6c5d8acb-5194-4553-ac74-f519177be01d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 570
+        'y': 540
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 9e1bf90f-7388-4eb2-b5ae-0077cdfb4d54
+      iscontainedinside:
+        - 054eb7f4-eaff-4d88-932f-18b8b758768b
+    214382b7-ff4c-4177-8129-ab84e0a44754:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 570
+        'y': 660
+      z: 1
+      embeds: []
+    09fd09ab-46e6-443f-adaa-c35b59d92981:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 360
+        'y': 840
+      z: 1
+      embeds: []
+    fbda9c32-cf1b-4a50-9c87-7fe70bcd9a1a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 360
+        'y': 960
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 09fd09ab-46e6-443f-adaa-c35b59d92981
+    1cba77b5-33bc-4ab8-abdd-951d94378e9b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 480
+        'y': 840
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 09fd09ab-46e6-443f-adaa-c35b59d92981
+    ab182e53-f2b8-4e05-9ba3-15ab43c2cc9a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 240
+        'y': 840
+      z: 1
+      embeds: []
+    6cdbf21e-68c4-48cf-aea1-ab98c2c3bd9d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 380
+        'y': 710
+      z: 1
+      embeds: []

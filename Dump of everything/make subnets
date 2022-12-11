@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create VPC for ECS
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ''
+      CidrBlock: !Sub 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 054eb7f4-eaff-4d88-932f-18b8b758768b
+  PrivateSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs ''
+      CidrBlock: !Sub 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bb459bc1-00a0-464e-ad08-37211dd5e6a5
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ba8101d4-4622-4792-9a75-3432ac9bec2f
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c19d69ae-61ca-4378-9655-e4839102197e
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 813ce47c-ef1c-463a-b68e-b9dca38a5435
+  RouteTableAssociation1:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet1
+      RouteTableId: !Ref RouteTable
+  RouteTableAssociation2:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref Subnet2
+      RouteTableId: !Ref RouteTable
+  InternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fdcb0ed3-9a45-446a-9dd2-be327da81bff
+Outputs:
+  VPC:
+    Description: VPC
+    Value: !Ref VPC
+    Export:
+      Name: VPC
+  Subnet1:
+    Description: Subnet 1 on AZ1
+    Value: !Ref Subnet1
+    Export:
+      Name: Subnet1
+  Subnet2:
+    Description: Subnet 2 on AZ2
+    Value: !Ref Subnet2
+    Export:
+      Name: Subnet2
+Metadata:
+  'AWS::CloudFormation::Designer':
+    ba8101d4-4622-4792-9a75-3432ac9bec2f:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: -30
+        'y': 30
+      z: 1
+      embeds: []
+    7c805648-21b5-4cbf-b255-7cc6aad2b62d:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 60
+        'y': 390
+      z: 1
+      embeds: []
+    813ce47c-ef1c-463a-b68e-b9dca38a5435:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds:
+        - fdcb0ed3-9a45-446a-9dd2-be327da81bff
+    c19d69ae-61ca-4378-9655-e4839102197e:
+      source:
+        id: 7c805648-21b5-4cbf-b255-7cc6aad2b62d
+      target:
+        id: ba8101d4-4622-4792-9a75-3432ac9bec2f
+    fdcb0ed3-9a45-446a-9dd2-be327da81bff:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 150
+      z: 2
+      parent: 813ce47c-ef1c-463a-b68e-b9dca38a5435
+      embeds: []
+      isassociatedwith:
+        - ba8101d4-4622-4792-9a75-3432ac9bec2f
+      iscontainedinside:
+        - 813ce47c-ef1c-463a-b68e-b9dca38a5435
+      dependson:
+        - c19d69ae-61ca-4378-9655-e4839102197e
+    bb459bc1-00a0-464e-ad08-37211dd5e6a5:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 360
+        'y': 300
+      z: 1
+      embeds: []
+    054eb7f4-eaff-4d88-932f-18b8b758768b:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 360
+        'y': 90
+      z: 1
+      embeds: []

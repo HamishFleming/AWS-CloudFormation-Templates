@@ -1,0 +1,476 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: String
+    MinLength: '1'
+    MaxLength: '255'
+    AllowedPattern: '[\x20-\x7E]*'
+    ConstraintDescription: can contain only ASCII characters.
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: m1.small
+    AllowedValues:
+      - t1.micro
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - m3.xlarge
+      - m3.2xlarge
+      - c1.medium
+      - c1.xlarge
+      - cc1.4xlarge
+      - cc2.8xlarge
+      - cg1.4xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+  DBClass:
+    Default: db.m1.small
+    Description: Database instance class
+    Type: String
+    AllowedValues:
+      - db.m1.small
+      - db.m1.large
+      - db.m1.xlarge
+      - db.m2.xlarge
+      - db.m2.2xlarge
+      - db.m2.4xlarge
+    ConstraintDescription: must select a valid database instance type.
+  DBName:
+    Default: wordpress
+    Description: The WordPress database name
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBUser:
+    Default: admin
+    NoEcho: 'true'
+    Description: The WordPress database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBPassword:
+    Default: password
+    NoEcho: 'true'
+    Description: The WordPress database admin account password
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+  SSHLocation:
+    Description: ' The IP address range that can be used to SSH to the EC2 instances'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+Mappings:
+  AWSInstanceType2Arch:
+    t1.micro:
+      Arch: '64'
+    m1.small:
+      Arch: '64'
+    m1.medium:
+      Arch: '64'
+    m1.large:
+      Arch: '64'
+    m1.xlarge:
+      Arch: '64'
+    m2.xlarge:
+      Arch: '64'
+    m2.2xlarge:
+      Arch: '64'
+    m2.4xlarge:
+      Arch: '64'
+    m3.xlarge:
+      Arch: '64'
+    m3.2xlarge:
+      Arch: '64'
+    c1.medium:
+      Arch: '64'
+    c1.xlarge:
+      Arch: '64'
+    cc1.4xlarge:
+      Arch: 64HVM
+    cc2.8xlarge:
+      Arch: 64HVM
+    cg1.4xlarge:
+      Arch: 64HVM
+  AWSRegionArch2AMI:
+    us-east-1:
+      '32': ami-31814f58
+      '64': ami-1b814f72
+      64HVM: ami-0da96764
+    us-west-2:
+      '32': ami-38fe7308
+      '64': ami-30fe7300
+      64HVM: NOT_YET_SUPPORTED
+    us-west-1:
+      '32': ami-11d68a54
+      '64': ami-1bd68a5e
+      64HVM: NOT_YET_SUPPORTED
+    eu-west-1:
+      '32': ami-973b06e3
+      '64': ami-953b06e1
+      64HVM: NOT_YET_SUPPORTED
+    ap-southeast-1:
+      '32': ami-b4b0cae6
+      '64': ami-beb0caec
+      64HVM: NOT_YET_SUPPORTED
+    ap-southeast-2:
+      '32': ami-b3990e89
+      '64': ami-bd990e87
+      64HVM: NOT_YET_SUPPORTED
+    ap-northeast-1:
+      '32': ami-0644f007
+      '64': ami-0a44f00b
+      64HVM: NOT_YET_SUPPORTED
+    sa-east-1:
+      '32': ami-3e3be423
+      '64': ami-3c3be421
+      64HVM: NOT_YET_SUPPORTED
+Resources:
+  DBInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBName: !Ref DBName
+      Engine: MySQL
+      MasterUsername: !Ref DBUser
+      DBInstanceClass: !Ref DBClass
+      DBSecurityGroups:
+        - !GetAtt ContainerSecurityGroup.GroupId
+      VPCSecurityGroups:
+        - !GetAtt DBSecurityGroup.GroupId
+      AllocatedStorage: '5'
+      MasterUserPassword: !Ref DBPassword
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 68035366-24ce-4bfc-9b8d-5a58a2481eea
+    DependsOn:
+      - ContainerSecurityGroup
+  DBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupDescription: Database security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !GetAtt ContainerSecurityGroup.GroupId
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 30998deb-79d1-4180-9b6d-fcaee6b588f4
+  containerVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      InstanceTenancy: default
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0b8fe287-3c36-476e-b62e-725274819b66
+  containerSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      VpcId: !Ref containerVPC
+      CidrBlock: 10.0.0.0/24
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 72f2a7ed-718a-4926-9c31-accc6fa79282
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref containerVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 20412f46-6e73-44a4-a69a-8eb82b8b6940
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f6de762c-5ebc-46d8-bccf-5ce6617f4359
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref containerVPC
+      InternetGatewayId: !Ref InternetGateway
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 51a502bf-fbce-4dc8-8d0d-4fa7e50c1d19
+  InternetRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 20f8b8db-c61d-4522-9fa6-1ade593c8961
+  SubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref containerSubnet
+  Cluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: deployment-example-cluster
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 83a71669-58a8-49fa-94ef-b389fd2d7802
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: deployment-example-log-group
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 03cfa8bf-9852-4119-a831-7ce998dd5001
+  ExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: deployment-example-role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2d00a41d-1665-4dc9-9d59-b99657419dde
+  ContainerSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: ContainerSecurityGroup
+      GroupDescription: Security group for NGINX container
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref containerVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1c13f700-cccd-4aae-beb3-82e8c5d16ee8
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: deployment-example-task
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !Ref ExecutionRole
+      ContainerDefinitions:
+        - Name: deployment-example-container
+          Image: '926777877150.dkr.ecr.ap-southeast-2.amazonaws.com/msfm-wp:latest'
+          PortMappings:
+            - ContainerPort: 80
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: ecs
+          Environment:
+            WORDPRESS_DB_HOST: !GetAtt DBInstance.Endpoint.Address
+            WORDPRESS_DB_USER: !Ref DBUser
+            WORDPRESS_DB_PASSWORD: !Ref DBPassword
+            WORDPRESS_DB_NAME: !Ref DBName
+      RequiresCompatibilities:
+        - EC2
+        - FARGATE
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 01c737f2-8ace-41a9-b3fc-348aaa8a1e06
+  Service:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      ServiceName: deployment-example-service
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref containerSubnet
+          SecurityGroups:
+            - !GetAtt ContainerSecurityGroup.GroupId
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 51f7188e-6c62-44e1-891f-d828aafee8c5
+Metadata:
+  'AWS::CloudFormation::Designer':
+    1c13f700-cccd-4aae-beb3-82e8c5d16ee8:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 400
+        'y': 710
+      z: 1
+      embeds: []
+      iscontainedinside:
+        - d2c3413e-8773-4d69-a184-9af7fda48108
+        - 0b8fe287-3c36-476e-b62e-725274819b66
+    2d00a41d-1665-4dc9-9d59-b99657419dde:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': 210
+      z: 1
+      embeds: []
+    03cfa8bf-9852-4119-a831-7ce998dd5001:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds: []
+    01c737f2-8ace-41a9-b3fc-348aaa8a1e06:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 300
+      z: 1
+      embeds: []
+    83a71669-58a8-49fa-94ef-b389fd2d7802:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 630
+        'y': 390
+      z: 1
+      embeds: []
+      dependson:
+        - d2c3413e-8773-4d69-a184-9af7fda48108
+    51f7188e-6c62-44e1-891f-d828aafee8c5:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 420
+      z: 1
+      embeds: []
+    f6de762c-5ebc-46d8-bccf-5ce6617f4359:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 780
+      z: 1
+      embeds: []
+    0b8fe287-3c36-476e-b62e-725274819b66:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 150
+        'y': 630
+      z: 1
+      embeds: []
+    51a502bf-fbce-4dc8-8d0d-4fa7e50c1d19:
+      source:
+        id: 0b8fe287-3c36-476e-b62e-725274819b66
+      target:
+        id: f6de762c-5ebc-46d8-bccf-5ce6617f4359
+      z: 1
+    20412f46-6e73-44a4-a69a-8eb82b8b6940:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 210
+        'y': 810
+      z: 1
+      embeds:
+        - 20f8b8db-c61d-4522-9fa6-1ade593c8961
+    20f8b8db-c61d-4522-9fa6-1ade593c8961:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 240
+        'y': 870
+      z: 2
+      parent: 20412f46-6e73-44a4-a69a-8eb82b8b6940
+      embeds: []
+      isassociatedwith:
+        - f6de762c-5ebc-46d8-bccf-5ce6617f4359
+      iscontainedinside:
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+        - 20412f46-6e73-44a4-a69a-8eb82b8b6940
+    72f2a7ed-718a-4926-9c31-accc6fa79282:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 60
+        'y': 450
+      z: 1
+      embeds: []
+    68035366-24ce-4bfc-9b8d-5a58a2481eea:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 810
+        'y': 610
+      z: 1
+      embeds: []
+    30998deb-79d1-4180-9b6d-fcaee6b588f4:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 590
+        'y': 500
+      z: 1
+      embeds: []

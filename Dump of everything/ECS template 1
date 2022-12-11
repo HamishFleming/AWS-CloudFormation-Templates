@@ -1,0 +1,802 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  ECS: service that runs on an ECS cluster and uses the cluster's ALB based on
+  ecs/cluster.yaml, a cloudonaut.io template
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: Parent Stacks
+        Parameters:
+          - ParentClusterStack
+          - ParentAlertStack
+          - ParentZoneStack
+      - Label:
+          default: Load Balancer Parameters
+        Parameters:
+          - LoadBalancerPriority
+          - LoadBalancerHostPattern
+          - LoadBalancerPath
+          - LoadBalancerHttps
+          - LoadBalancerDeregistrationDelay
+      - Label:
+          default: Task Parameters
+        Parameters:
+          - Image
+      - Label:
+          default: Service Parameters
+        Parameters:
+          - SubDomainNameWithDot
+          - AutoScaling
+          - DesiredCount
+          - MaxCapacity
+          - MinCapacity
+          - HealthCheckGracePeriod
+          - HealthCheckPath
+      - Label:
+          default: Permission Parameters
+        Parameters:
+          - PermissionsBoundary
+  'AWS::CloudFormation::Designer':
+    b5492c42-cf6d-4367-a5bf-e215306d103c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds: []
+    62c9a48b-93db-4a6b-8355-929cffcb8864:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 90
+      z: 1
+      embeds: []
+    6ec05f08-589d-4f71-9188-37b07723c078:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 210
+      z: 1
+      embeds: []
+    c91e1f8b-f694-4a4f-a6d4-22a2afa76dd9:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 210
+      z: 1
+      embeds: []
+    0ba3a294-6aed-4bea-9391-f20575f8fe4f:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 90
+      z: 1
+      embeds: []
+    bb3688ec-42a6-40b5-81e4-fea69b722d73:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 210
+      z: 1
+      embeds: []
+    b5f2f3fe-9c67-4367-98b2-023d15a0b4c8:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 330
+      z: 1
+      embeds: []
+    84845daf-73f7-4504-8d36-4d8ee921ef09:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 330
+      z: 1
+      embeds: []
+    f7d180dd-8124-47a9-a940-683ee2e733ff:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 330
+      z: 1
+      embeds: []
+    3c9f3cea-b956-4989-b74c-b46f4465cd14:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 90
+      z: 1
+      embeds: []
+    97235d87-2af0-4ddd-abd0-f6259d1ac37b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 210
+      z: 1
+      embeds: []
+    f8cf9dfe-982c-4dad-9941-2b3f6e9a5a0c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 330
+      z: 1
+      embeds: []
+    7ba8648d-d8f1-4b21-8fe1-19cd5492ac0a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 450
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - f8cf9dfe-982c-4dad-9941-2b3f6e9a5a0c
+    c91b95f0-8dba-4a7a-beab-39e6dc8f5c9d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 180
+        'y': 450
+      z: 1
+      embeds: []
+    3b08ba52-e1b2-4383-ac8a-b3b8000f8787:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 450
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - f8cf9dfe-982c-4dad-9941-2b3f6e9a5a0c
+    9b24ff44-b640-4860-9c19-c9816ff93f64:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 450
+      z: 1
+      embeds: []
+    e62827db-9e86-4915-9af7-cf6e5426a55d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 90
+      z: 1
+      embeds: []
+    cef33636-c008-451e-b6eb-a4c9ea599929:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 210
+      z: 1
+      embeds: []
+Parameters:
+  ParentClusterStack:
+    Description: Stack name of parent Cluster stack based on ecs/cluster.yaml template.
+    Type: String
+  ParentAlertStack:
+    Description: >-
+      Optional but recommended stack name of parent alert stack based on
+      operations/alert.yaml template.
+    Type: String
+    Default: ''
+  ParentZoneStack:
+    Description: >-
+      Optional stack name of parent zone stack based on vpc/zone-*.yaml
+      template.
+    Type: String
+    Default: ''
+  PermissionsBoundary:
+    Description: >-
+      Optional ARN for a policy that will be used as the permission boundary for
+      all roles created by this template.
+    Type: String
+    Default: ''
+  LoadBalancerPriority:
+    Description: >-
+      The priority for the rule. Elastic Load Balancing evaluates rules in
+      priority order, from the lowest value to the highest value. If a request
+      satisfies a rule, Elastic Load Balancing ignores all subsequent rules. A
+      target group can have only one rule with a given priority.
+    Type: Number
+    Default: 1
+    ConstraintDescription: 'Must be in the range [1-99999]'
+    MinValue: 1
+    MaxValue: 99999
+  LoadBalancerHostPattern:
+    Description: >-
+      Optional host pattern. Specify LoadBalancerPath and/or
+      LoadBalancerHostPattern.
+    Type: String
+    Default: ''
+    ConstraintDescription: Must not be longer than 255
+    MaxLength: 255
+  LoadBalancerPath:
+    Description: >-
+      Optional path part of the path pattern. E.g., for service, the path
+      pattern will be /service/*.  Specify LoadBalancerPath and/or
+      LoadBalancerHostPattern.
+    Type: String
+    Default: service
+    ConstraintDescription: Must not be longer than 255
+    MaxLength: 255
+  LoadBalancerHttps:
+    Description: >-
+      If the cluster supports HTTPS (LoadBalancerCertificateArn is set) you can
+      enable HTTPS for the service
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+  LoadBalancerDeregistrationDelay:
+    Description: >-
+      The amount time (in seconds) to wait before changing the state of a
+      deregistering target from draining to unused.
+    Type: Number
+    Default: 60
+    ConstraintDescription: 'Must be in the range [0-3600]'
+    MinValue: 0
+    MaxValue: 3600
+  Image:
+    Description: >-
+      The image to use for a container, which is passed directly to the Docker
+      daemon. You can use images in the Docker Hub registry or specify other
+      repositories (repository-url/image:tag).
+    Type: String
+  DesiredCount:
+    Description: 'The number of simultaneous tasks, that you want to run on the cluster.'
+    Type: Number
+    Default: 2
+    ConstraintDescription: Must be >= 1
+    MinValue: 1
+  MaxCapacity:
+    Description: >-
+      The maximum number of simultaneous tasks, that you want to run on the
+      cluster.
+    Type: Number
+    Default: 4
+    ConstraintDescription: Must be >= 1
+    MinValue: 1
+  MinCapacity:
+    Description: >-
+      The minimum number of simultaneous tasks, that you want to run on the
+      cluster.
+    Type: Number
+    Default: 2
+    ConstraintDescription: Must be >= 1
+    MinValue: 1
+  SubDomainNameWithDot:
+    Description: >-
+      Name that is used to create the DNS entry with trailing dot, e.g.
+      ��{SubDomainNameWithDot}��{HostedZoneName}. Leave blank for naked (or apex
+      and bare) domain. Requires ParentZoneStack parameter!
+    Type: String
+    Default: ''
+  AutoScaling:
+    Description: Scale number of tasks based on CPU load?
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  HealthCheckGracePeriod:
+    Description: >-
+      The period of time, in seconds, that the Amazon ECS service scheduler
+      ignores unhealthy Elastic Load Balancing target health checks after a task
+      has first started.
+    Type: Number
+    Default: 60
+    MinValue: 0
+    MaxValue: 1800
+  HealthCheckPath:
+    Description: Path of health check
+    Type: String
+    Default: /
+Conditions:
+  HasPermissionsBoundary: !Not 
+    - !Equals 
+      - Ref: PermissionsBoundary
+      - ''
+  HasLoadBalancerHttps: !Equals 
+    - !Ref LoadBalancerHttps
+    - 'true'
+  HasLoadBalancerPath: !Not 
+    - !Equals 
+      - Ref: LoadBalancerPath
+      - ''
+  HasLoadBalancerHostPattern: !Not 
+    - !Equals 
+      - Ref: LoadBalancerHostPattern
+      - ''
+  HasAlertTopic: !Not 
+    - !Equals 
+      - !Ref ParentAlertStack
+      - ''
+  HasZone: !Not 
+    - !Equals 
+      - !Ref ParentZoneStack
+      - ''
+  HasAutoScaling: !Equals 
+    - !Ref AutoScaling
+    - 'true'
+Resources:
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Ref 'AWS::StackName'
+      NetworkMode: bridge
+      ContainerDefinitions:
+        - Name: main
+          Image: !Ref Image
+          Memory: 128
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-group:
+                'Fn::ImportValue': !Sub '${ParentClusterStack}-LogGroup'
+              awslogs-stream-prefix: !Ref 'AWS::StackName'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 3c9f3cea-b956-4989-b74c-b46f4465cd14
+  RecordSet:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      AliasTarget:
+        HostedZoneId:
+          'Fn::ImportValue': !Sub '${ParentClusterStack}-CanonicalHostedZoneID'
+        DNSName:
+          'Fn::ImportValue': !Sub '${ParentClusterStack}-DNSName'
+      HostedZoneId:
+        'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneId'
+      Name: !Sub 
+        - '${SubDomainNameWithDot}${HostedZoneName}'
+        - SubDomainNameWithDot: !Ref SubDomainNameWithDot
+          HostedZoneName:
+            'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'
+      Type: A
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f7d180dd-8124-47a9-a940-683ee2e733ff
+  RecordSetIPv6:
+    Condition: HasZone
+    Type: 'AWS::Route53::RecordSet'
+    Properties:
+      AliasTarget:
+        HostedZoneId:
+          'Fn::ImportValue': !Sub '${ParentClusterStack}-CanonicalHostedZoneID'
+        DNSName:
+          'Fn::ImportValue': !Sub '${ParentClusterStack}-DNSName'
+      HostedZoneId:
+        'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneId'
+      Name: !Sub 
+        - '${SubDomainNameWithDot}${HostedZoneName}'
+        - SubDomainNameWithDot: !Ref SubDomainNameWithDot
+          HostedZoneName:
+            'Fn::ImportValue': !Sub '${ParentZoneStack}-HostedZoneName'
+      Type: AAAA
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 84845daf-73f7-4504-8d36-4d8ee921ef09
+  LoadBalancerTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200-299
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        'Fn::ImportValue': !Sub '${ParentClusterStack}-VPC'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: !Ref LoadBalancerDeregistrationDelay
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6ec05f08-589d-4f71-9188-37b07723c078
+  HTTPCodeTarget5XXTooHighAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Application load balancer receives 5XX HTTP status codes from targets
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      AlarmActions:
+        - 'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            'Fn::ImportValue': !Sub '${ParentClusterStack}-LoadBalancerFullName'
+        - Name: TargetGroup
+          Value: !GetAtt LoadBalancerTargetGroup.TargetGroupFullName
+      TreatMissingData: notBreaching
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b5f2f3fe-9c67-4367-98b2-023d15a0b4c8
+  TargetConnectionErrorCountTooHighAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Application load balancer could not connect to targets
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetConnectionErrorCount
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      AlarmActions:
+        - 'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            'Fn::ImportValue': !Sub '${ParentClusterStack}-LoadBalancerFullName'
+        - Name: TargetGroup
+          Value: !GetAtt LoadBalancerTargetGroup.TargetGroupFullName
+      TreatMissingData: notBreaching
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bb3688ec-42a6-40b5-81e4-fea69b722d73
+  LoadBalancerHttpListenerRule:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      Conditions: !If 
+        - HasLoadBalancerPath
+        - !If 
+          - HasLoadBalancerHostPattern
+          - - Field: host-header
+              Values:
+                - !Ref LoadBalancerHostPattern
+            - Field: path-pattern
+              Values:
+                - !Sub '/${LoadBalancerPath}/*'
+          - - Field: path-pattern
+              Values:
+                - !Sub '/${LoadBalancerPath}/*'
+        - !If 
+          - HasLoadBalancerHostPattern
+          - - Field: host-header
+              Values:
+                - !Ref LoadBalancerHostPattern
+          - []
+      ListenerArn:
+        'Fn::ImportValue': !Sub '${ParentClusterStack}-HttpListener'
+      Priority: !Ref LoadBalancerPriority
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0ba3a294-6aed-4bea-9391-f20575f8fe4f
+  LoadBalancerHttpsListenerRule:
+    Condition: HasLoadBalancerHttps
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      Conditions: !If 
+        - HasLoadBalancerPath
+        - !If 
+          - HasLoadBalancerHostPattern
+          - - Field: host-header
+              Values:
+                - !Ref LoadBalancerHostPattern
+            - Field: path-pattern
+              Values:
+                - !Sub '/${LoadBalancerPath}/*'
+          - - Field: path-pattern
+              Values:
+                - !Sub '/${LoadBalancerPath}/*'
+        - !If 
+          - HasLoadBalancerHostPattern
+          - - Field: host-header
+              Values:
+                - !Ref LoadBalancerHostPattern
+          - []
+      ListenerArn:
+        'Fn::ImportValue': !Sub '${ParentClusterStack}-HttpsListener'
+      Priority: !Ref LoadBalancerPriority
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c91e1f8b-f694-4a4f-a6d4-22a2afa76dd9
+  ServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole'
+      AssumeRolePolicyDocument:
+        Version: 2008-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If 
+        - HasPermissionsBoundary
+        - !Ref PermissionsBoundary
+        - !Ref 'AWS::NoValue'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 62c9a48b-93db-4a6b-8355-929cffcb8864
+  Service:
+    Type: 'AWS::ECS::Service'
+    Properties:
+      Cluster:
+        'Fn::ImportValue': !Sub '${ParentClusterStack}-Cluster'
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      DesiredCount: !Ref DesiredCount
+      HealthCheckGracePeriodSeconds: !Ref HealthCheckGracePeriod
+      LoadBalancers:
+        - ContainerName: main
+          ContainerPort: 80
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      PlacementStrategies:
+        - Type: spread
+          Field: 'attribute:ecs.availability-zone'
+        - Type: spread
+          Field: instanceId
+      Role: !GetAtt ServiceRole.Arn
+      TaskDefinition: !Ref TaskDefinition
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 97235d87-2af0-4ddd-abd0-f6259d1ac37b
+  CPUUtilizationTooHighAlarm:
+    Condition: HasAlertTopic
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Average CPU utilization over last 10 minutes higher than 80%
+      Namespace: AWS/ECS
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            'Fn::ImportValue': !Sub '${ParentClusterStack}-Cluster'
+        - Name: ServiceName
+          Value: !GetAtt Service.Name
+      MetricName: CPUUtilization
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      AlarmActions:
+        - 'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: cef33636-c008-451e-b6eb-a4c9ea599929
+  ServiceFailedNotification:
+    Condition: HasAlertTopic
+    Type: 'AWS::Events::Rule'
+    Properties:
+      EventPattern:
+        source:
+          - aws.ecs
+        detail-type:
+          - ECS Service Action
+        resources:
+          - !Ref Service
+        detail:
+          eventType:
+            - ERROR
+            - WARN
+      State: ENABLED
+      Targets:
+        - Arn:
+            'Fn::ImportValue': !Sub '${ParentAlertStack}-TopicARN'
+          Id: rule
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: e62827db-9e86-4915-9af7-cf6e5426a55d
+  ScalableTargetRole:
+    Condition: HasAutoScaling
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+            Action: 'sts:AssumeRole'
+      PermissionsBoundary: !If 
+        - HasPermissionsBoundary
+        - !Ref PermissionsBoundary
+        - !Ref 'AWS::NoValue'
+      Policies:
+        - PolicyName: ecs
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecs:DescribeServices'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+        - PolicyName: cloudwatch
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:DescribeAlarms'
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b5492c42-cf6d-4367-a5bf-e215306d103c
+  ScalableTarget:
+    Condition: HasAutoScaling
+    Type: 'AWS::ApplicationAutoScaling::ScalableTarget'
+    Properties:
+      MaxCapacity: !Ref MaxCapacity
+      MinCapacity: !Ref MinCapacity
+      ResourceId: !Sub 
+        - 'service/${Cluster}/${Service}'
+        - Cluster:
+            'Fn::ImportValue': !Sub '${ParentClusterStack}-Cluster'
+          Service: !GetAtt Service.Name
+      RoleARN: !GetAtt ScalableTargetRole.Arn
+      ScalableDimension: 'ecs:service:DesiredCount'
+      ServiceNamespace: ecs
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f8cf9dfe-982c-4dad-9941-2b3f6e9a5a0c
+  ScaleUpPolicy:
+    Condition: HasAutoScaling
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-scale-up'
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ScalableTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 300
+        MinAdjustmentMagnitude: 1
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 25
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 3b08ba52-e1b2-4383-ac8a-b3b8000f8787
+  ScaleDownPolicy:
+    Condition: HasAutoScaling
+    Type: 'AWS::ApplicationAutoScaling::ScalingPolicy'
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-scale-down'
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref ScalableTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 300
+        MinAdjustmentMagnitude: 1
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: -25
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 7ba8648d-d8f1-4b21-8fe1-19cd5492ac0a
+  CPUUtilizationHighAlarm:
+    Condition: HasAutoScaling
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Service is running out of CPU
+      Namespace: AWS/ECS
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            'Fn::ImportValue': !Sub '${ParentClusterStack}-Cluster'
+        - Name: ServiceName
+          Value: !GetAtt Service.Name
+      MetricName: CPUUtilization
+      ComparisonOperator: GreaterThanThreshold
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 60
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9b24ff44-b640-4860-9c19-c9816ff93f64
+  CPUUtilizationLowAlarm:
+    Condition: HasAutoScaling
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Service is wasting CPU
+      Namespace: AWS/ECS
+      Dimensions:
+        - Name: ClusterName
+          Value:
+            'Fn::ImportValue': !Sub '${ParentClusterStack}-Cluster'
+        - Name: ServiceName
+          Value: !GetAtt Service.Name
+      MetricName: CPUUtilization
+      ComparisonOperator: LessThanThreshold
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 30
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c91b95f0-8dba-4a7a-beab-39e6dc8f5c9d
+Outputs:
+  TemplateID:
+    Description: cloudonaut.io template id.
+    Value: ecs/service-cluster-alb
+  TemplateVersion:
+    Description: cloudonaut.io template version.
+    Value: 14.4.0
+  StackName:
+    Description: Stack name.
+    Value: !Sub '${AWS::StackName}'
+  DNSName:
+    Description: The DNS name for the ECS cluster/service load balancer.
+    Value:
+      'Fn::ImportValue': !Sub '${ParentClusterStack}-DNSName'
+    Export:
+      Name: !Sub '${AWS::StackName}-DNSName'
+  URL:
+    Description: URL to the ECS service.
+    Value: !Sub 
+      - '${ClusterURL}/${LoadBalancerPath}/'
+      - ClusterURL:
+          'Fn::ImportValue': !Sub '${ParentClusterStack}-URL'
+        LoadBalancerPath: !Ref LoadBalancerPath
+    Export:
+      Name: !Sub '${AWS::StackName}-URL'
