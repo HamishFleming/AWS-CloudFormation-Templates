@@ -39,7 +39,7 @@ If I have time I will try to clean up the templates and add more documentation, 
 <!-- Template Section -->
 <br />
 <div align="center">
-<h1 align="center">Some Of The Templates</h1>
+<h1 align="center">On To The Templates 🗎</h1>
 </ br>
 </div>
 
