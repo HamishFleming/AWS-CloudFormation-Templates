@@ -10,7 +10,6 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-
 <h1 align="center">Cloud Formation Templates Primarily For Wordpress</h1>
 </ br>
 </div>
@@ -25,13 +24,28 @@ Many of these templates are WIP, and yet to be sorted into their own folders. So
 
 This Repo should be considered inspiration for your own templates, as at this point in time it is solely to store the templates I have ended up with floating around my computer.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+If I have time I will try to clean up the templates and add more documentation, but for now I am just trying to get them all in one place.
 
+<!-- ROADMAP -->
+## Roadmap
+
+- [ ] Clean Up File Structure
+- [ ] Tag Incomplete Templates With WIP
+- [ ] Extend this Readme.md
+- [ ] Ensure All Other Templates Are Fully Functional Independently
+    - [ ] Create Readme.md For Each Template
+<br>
+
+<!-- Template Section -->
+<br />
+<div align="center">
+<h1 align="center">Some Of The Templates</h1>
+</ br>
+</div>
 
 <!-- Formation Start -->
 <br />
 <div>
-<hr>
 <div align="center">
   <a href="https://github.com/HamishFleming/AWS-CloudFormation-Templates">
     <img src="Build and deploy ECS\Build-And-Deploy-ECS.png" alt="Logo" width="100%" height="100%">
@@ -171,3 +185,14 @@ Here's a blank template to get started: To avoid retyping too much info. Do a se
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 </div>
 <!-- Formation End -->
+
+
+
+
+<!-- ACKNOWLEDGMENTS -->
+## Acknowledgments
+
+* [Best-README-Template](https://github.com/othneildrew/Best-README-Template)
+
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
