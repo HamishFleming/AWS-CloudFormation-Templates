@@ -1,0 +1,45 @@
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      Family: !Sub '${EnvironmentName}-service-${ServiceName}'
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      MountPoints:
+        - ContainerPath: /var/www/public_html/wp-content/wp-uploads
+          SourceVolume: WordpressUploads
+      Volumes:
+        - name: WordpressUploads
+          efsVolumeConfiguration:
+            fileSystemId: !Ref WpFileSystem
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Image: !Ref ImageUrl
+          Cpu: !Ref ContainerCpu
+          Memory: !Ref ContainerMemory
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          Environment:
+            - name: WORDPRESS_DB_USER
+              value: !Ref wordpressDBUser
+            - name: WORDPRESS_DB_HOST
+              value: !GetAtt
+                - WordpressDB
+                - Endpoint.Address
+            - name: WORDPRESS_DB_PASSWORD
+              value: !Ref wordpressDBPassword
+            - name: WORDPRESS_DB_NAME
+              value: !Ref wordpressDBName
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub '${EnvironmentName}-service-${ServiceName}'
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: !Ref ServiceName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 26435baa-a7bc-423a-9866-33de1d7a6a87
+    DependsOn: WordpressDB

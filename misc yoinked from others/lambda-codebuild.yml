@@ -1,0 +1,733 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  o presente template visa criar um único modelo de criação de funcoes lambda
+  para a Intuitivecare.
+Parameters:
+  CodeStarConnection:
+    Type: String
+  RepoName:
+    Type: String
+  Version:
+    Type: String
+    Default: 1
+    AllowedPattern: '[V0-9]'
+  PathImageCodeBuild:
+    Type: String
+  LambdaRegion:
+    Type: String
+    Default: us-east-1
+  LambdaRunTime:
+    Type: String
+    Default: python3.6
+  LambdaFunctionSubNetA:
+    Type: String
+  LambdaFunctionSubNetB:
+    Type: String
+  LambdaSecurityGroup:
+    Type: String
+Resources:
+  ConnectionBitbucket:
+    Type: 'AWS::CodeStarConnections::Connection'
+    Properties:
+      ConnectionName: !Ref CodeStarConnection
+      ProviderType: Bitbucket
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 550164b2-2048-4fa2-87da-a66136d0233c
+  DeploymentArtifactBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    Properties:
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0cca68fe-62f5-4e67-9915-0006001c5670
+  DeployS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      BucketName: !Join
+        - '-'
+        - - pipeline
+          - !Ref RepoName
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Appication
+          Value: !Ref RepoName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 191c7296-ad35-47ee-913e-ac995e685bee
+  logLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      RetentionInDays: 7
+      LogGroupName: !Sub
+        - 'Log-${RepoName}'
+        - RepoName: !Ref RepoName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c9854876-d0a3-4cd4-abf7-e445cc93dab1
+  CodeBuildServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1cfef844-b52c-4b0b-b08e-b234c5984c70
+  CodeBuildServicePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: CodeBuildServicePolicy
+      Roles:
+        - !Ref CodeBuildServiceRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: 'arn:aws:logs:*:*:*'
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:PutObject'
+              - 's3:GetBucketAcl'
+              - 's3:GetBucketLocation'
+            Resource:
+              - !Sub 'arn:aws:s3:::codepipeline-${AWS::Region}-*/*'
+              - !Sub 'arn:aws:s3:::${DeploymentArtifactBucket}/*'
+          - Effect: Allow
+            Action:
+              - 'codebuild:CreateReportGroup'
+              - 'codebuild:CreateReport'
+              - 'codebuild:UpdateReport'
+              - 'codebuild:BatchPutTestCases'
+            Resource:
+              - !Sub >-
+                arn:aws:codebuild:us-east-1:XXXXXXXXXXXXX:report-group/${RepoName}-${Version}-bitbucket-*
+          - Effect: Allow
+            Action:
+              - 'ecr:GetAuthorizationToken'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'ecr:BatchCheckLayerAvailability'
+              - 'ecr:GetDownloadUrlForLayer'
+              - 'ecr:BatchGetImage'
+              - 'ecr:PutImage'
+              - 'ecr:InitiateLayerUpload'
+              - 'ecr:UploadLayerPart'
+              - 'ecr:CompleteLayerUpload'
+            Resource: 'arn:aws:ecr:us-east-1:XXXXXXXXXXXXX:repository/bitbucket'
+          - Effect: Allow
+            Action:
+              - 'codestar-connections:UseConnection'
+            Resource: !Ref ConnectionBitbucket
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 73d1a1a1-5a0e-41f6-b6bc-dca52fc7fa4b
+  CodeBuildProject:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      Name: !Join
+        - '-'
+        - - !Ref RepoName
+          - '-codebuild'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Ref PathImageCodeBuild
+        EnvironmentVariables:
+          - Name: BUILD_ARTIFACT_BUCKET
+            Value: !Ref DeploymentArtifactBucket
+      Source:
+        Auth:
+          Type: OAUTH
+        Type: CODEPIPELINE
+        Location: !Sub 'https://bitbucket.org/intuitivecare/${RepoName}'
+        BuildSpec: buildspec-bitbucket-parser.yml
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref logLogGroup
+          StreamName: !Ref Version
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 85153d09-f471-4ff8-9b0c-5290dfbd1fc0
+  CodePipelineServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 99194077-51cb-40ac-a430-b2a2dbaca33c
+  CodePipelineServicePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: !Join
+        - '-'
+        - - !Ref RepoName
+          - PipelineServicePolicy
+      Roles:
+        - !Ref CodePipelineServiceRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: 'arn:aws:logs:*:*:*'
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${DeployS3Bucket}/*'
+          - Effect: Allow
+            Action:
+              - 'cloudformation:CreateStack,'
+              - 'cloudformation:DeleteStack,'
+              - 'cloudformation:DescribeStacks,'
+              - 'cloudformation:UpdateStack,'
+              - 'cloudformation:CreateChangeSet,'
+              - 'cloudformation:DeleteChangeSet,'
+              - 'cloudformation:DescribeChangeSet,'
+              - 'cloudformation:ExecuteChangeSet,'
+              - 'cloudformation:SetStackPolicy,'
+              - 'cloudformation:ValidateTemplate,'
+            Resource: !Join
+              - '-'
+              - - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/'
+                - RepoName
+                - Version
+                - /*
+          - Effect: Allow
+            Action:
+              - 'codebuild:BatchGetBuilds'
+              - 'codebuild:StartBuild'
+              - 'codebuild:StopBuild'
+            Resource: !GetAtt CodeBuildProject.Arn
+          - Effect: Allow
+            Action:
+              - 'codestar-connections:UseConnection'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'iam:PassRole'
+            Resource:
+              - '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ec9b523e-cc8e-464d-a710-6c2a04ef83f5
+  CloudFormationServiceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 99a82908-bee2-44d9-a33b-537e0ba1087d
+  CloudFormationServicePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: CloudFormationServicePolicy
+      Roles:
+        - !Ref CloudFormationServiceRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: 'arn:aws:logs:*:*:*'
+          - Effect: Allow
+            Action:
+              - 'cloudformation:CreateChangeSet'
+              - 'cloudformation:ListChangeSets'
+            Resource: !Sub 'arn:aws:cloudformation:${AWS::Region}:aws:transform/*'
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Sub 'arn:aws:s3:::codepipeline-${AWS::Region}-*/*'
+              - !Sub 'arn:aws:s3:::${DeploymentArtifactBucket}/*'
+          - Effect: Allow
+            Action:
+              - 'iam:AttachRolePolicy'
+              - 'iam:CreateRole'
+              - 'iam:DeleteRole'
+              - 'iam:DeleteRolePolicy'
+              - 'iam:DetachRolePolicy'
+              - 'iam:GetRole'
+              - 'iam:PassRole'
+              - 'iam:PutRolePolicy'
+              - 'codestar-connections:UseConnection'
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${RepoName}-*'
+          - Effect: Allow
+            Action:
+              - 'lambda:AddPermission'
+              - 'lambda:CreateFunction'
+              - 'lambda:DeleteFunction'
+              - 'lambda:GetFunction'
+              - 'lambda:GetFunctionConfiguration'
+              - 'lambda:InvokeFunction'
+              - 'lambda:RemovePermission'
+              - 'lambda:TagResource'
+              - 'lambda:UntagResource'
+              - 'lambda:UpdateFunctionCode'
+              - 'lambda:UpdateFunctionConfiguration'
+            Resource: !Sub >-
+              arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:Lambda-${RepoName}-${Version}-*
+          - Effect: Allow
+            Action:
+              - 'lambda:CreateEventSourceMapping'
+              - 'lambda:DeleteEventSourceMapping'
+              - 'lambda:GetEventSourceMapping'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'lambda:ListTags'
+              - 'lambda:TagResource'
+              - 'lambda:UntagResource'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'events:DeleteRule'
+              - 'events:DescribeRule'
+              - 'events:DisableRule'
+              - 'events:EnableRule'
+              - 'events:PutRule'
+              - 'events:PutTargets'
+              - 'events:RemoveTargets'
+            Resource: !Sub >-
+              arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/Log-${RepoName}-*
+          - Effect: Allow
+            Action:
+              - 's3:CreateBucket'
+              - 's3:GetBucketAcl'
+              - 's3:GetBucketNotification'
+              - 's3:GetBucketTagging'
+              - 's3:PutBucketAcl'
+              - 's3:PutBucketNotification'
+              - 's3:PutBucketTagging'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'codestar-connections:UseConnection'
+            Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c60ea5a9-07e2-483e-8eae-d6379c0613d8
+  CodePipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      Name: !Join
+        - '-'
+        - - Pipeline
+          - !Ref RepoName
+          - !Ref Version
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref DeploymentArtifactBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+              InputArtifacts: []
+              OutputArtifacts:
+                - Name: SourceArtifact
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                FullRepositoryId: !Sub 'intuitivecare/${RepoName}'
+                BranchName: master
+                OutputArtifactFormat: CODE_ZIP
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 2
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                BucketName:
+                  'Fn::Join':
+                    - '-'
+                    - - Bucket
+                      - Ref: RepoName
+                Extract: 'true'
+                ObjectKey:
+                  'Fn::Sub': 'Artifact-${RepoName}-${Version}'
+              InputArtifacts:
+                - Name: BuildArtifact
+              RunOrder: 3
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c6ed7b46-f9a1-44ce-810a-add08464d5fe
+  lambdaFunctionExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d58d51c4-1118-43ef-9c3d-f41d0c39cc43
+  lambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Description: !Sub 'LambdaFunction-${RepoName}'
+      FunctionName: !Sub 'Lambda-${RepoName}-${Version}'
+      Handler: lambda_handler
+      MemorySize: 3008
+      Role: !GetAtt lambdaFunctionExecutionRole.Arn
+      Runtime: !Ref LambdaRunTime
+      Timeout: 900
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref LambdaFunctionSubNetA
+          - !Ref LambdaFunctionSubNetB
+      Code:
+        S3Bucket: !Ref DeployS3Bucket
+        S3Key:
+          'Fn::Sub': 'Artifact-${RepoName}-${Version}'
+      Tags:
+        - Key: keyname
+          Value: value
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 63c44799-fe43-491b-b525-077b8edfbe2f
+  lambdaVersion:
+    Type: 'AWS::Lambda::Version'
+    Properties:
+      Description: !Sub 'Lambda Version para ${RepoName}-${Version}'
+      FunctionName: !Ref lambdaFunction
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ae15bc15-7c5a-47e5-b421-9f0c807050ae
+  lambdaAlias:
+    Type: 'AWS::Lambda::Alias'
+    Properties:
+      Description: !Sub 'Alias para a função lambda ${RepoName}-${Version}'
+      FunctionName: !Ref lambdaFunction
+      FunctionVersion: !Ref lambdaVersion
+      Name: !Sub 'Alias-${RepoName}-${Version}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5eb3a134-ecf2-4e7a-bbe6-4509e82b1ad4
+  logsMetricFilter:
+    Type: 'AWS::Logs::MetricFilter'
+    Properties:
+      FilterPattern: '[...,state = SUCCEEDED]'
+      LogGroupName: !Ref logLogGroup
+      MetricTransformations:
+        - MetricValue: '1'
+          MetricNamespace: !Ref RepoName
+          MetricName: !Sub
+            - 'Deploy-Completo-${RepoName}-${Version}'
+            - RepoName: !Ref RepoName
+              Version: !Ref Version
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c2ec3ba8-02c6-4e35-9721-f9962951312a
+  snsTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !GetAtt lambdaFunction.Arn
+          Protocol: lambda
+      TopicName: !Sub 'Deploy-${RepoName}-${Version}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 599f3d60-ae08-43bb-bffa-63e38058a258
+  snsSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      TopicArn: !Ref snsTopic
+      Protocol: lambda
+      Endpoint: !GetAtt lambdaFunction.Arn
+      Region: !Ref LambdaRegion
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f9ff4375-e17a-4722-8f8a-5cfb767941f9
+  cloudWatchAlarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      MetricName: !Sub
+        - 'Deploy-Completo-${RepoName}-${Version}'
+        - RepoName: !Ref RepoName
+          Version: !Ref Version
+      Namespace: !Ref RepoName
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      Period: 1
+      Statistic: SampleCount
+      Threshold: 0.5
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref snsTopic
+      AlarmName: !Sub 'Deplpy-${RepoName}-${Version}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 1665e74b-2104-46c6-bba3-8cad382e9e00
+Metadata:
+  'AWS::CloudFormation::Designer':
+    d58d51c4-1118-43ef-9c3d-f41d0c39cc43:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 560
+      z: 1
+      embeds: []
+    99a82908-bee2-44d9-a33b-537e0ba1087d:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 640
+        'y': 560
+      z: 1
+      embeds: []
+    c60ea5a9-07e2-483e-8eae-d6379c0613d8:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 740
+        'y': 460
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 99a82908-bee2-44d9-a33b-537e0ba1087d
+    99194077-51cb-40ac-a430-b2a2dbaca33c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 640
+        'y': 60
+      z: 1
+      embeds: []
+    1cfef844-b52c-4b0b-b08e-b234c5984c70:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 640
+        'y': 160
+      z: 1
+      embeds: []
+    c9854876-d0a3-4cd4-abf7-e445cc93dab1:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 540
+        'y': 360
+      z: 1
+      embeds: []
+    c2ec3ba8-02c6-4e35-9721-f9962951312a:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 740
+        'y': 350
+      z: 1
+      embeds: []
+    191c7296-ad35-47ee-913e-ac995e685bee:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 340
+        'y': 560
+      z: 0
+      embeds: []
+    63c44799-fe43-491b-b525-077b8edfbe2f:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 440
+        'y': 560
+      z: 1
+      embeds: []
+    599f3d60-ae08-43bb-bffa-63e38058a258:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 340
+        'y': 360
+      z: 1
+      embeds: []
+    1665e74b-2104-46c6-bba3-8cad382e9e00:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 440
+        'y': 360
+      z: 1
+      embeds: []
+    f9ff4375-e17a-4722-8f8a-5cfb767941f9:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 340
+        'y': 260
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 599f3d60-ae08-43bb-bffa-63e38058a258
+    ae15bc15-7c5a-47e5-b421-9f0c807050ae:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 440
+        'y': 460
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 63c44799-fe43-491b-b525-077b8edfbe2f
+    5eb3a134-ecf2-4e7a-bbe6-4509e82b1ad4:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 340
+        'y': 460
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 63c44799-fe43-491b-b525-077b8edfbe2f
+        - ae15bc15-7c5a-47e5-b421-9f0c807050ae
+    0cca68fe-62f5-4e67-9915-0006001c5670:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 440
+        'y': 260
+      z: 1
+      embeds: []
+    85153d09-f471-4ff8-9b0c-5290dfbd1fc0:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 160
+      z: 1
+      embeds: []
+    c6ed7b46-f9a1-44ce-810a-add08464d5fe:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 260
+      z: 1
+      embeds: []
+    ec9b523e-cc8e-464d-a710-6c2a04ef83f5:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 540
+        'y': 60
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 99194077-51cb-40ac-a430-b2a2dbaca33c
+    550164b2-2048-4fa2-87da-a66136d0233c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 740
+        'y': 260
+      z: 1
+      embeds: []
+    73d1a1a1-5a0e-41f6-b6bc-dca52fc7fa4b:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 640
+        'y': 260
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 1cfef844-b52c-4b0b-b08e-b234c5984c70
